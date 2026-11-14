@@ -1,0 +1,9 @@
+cd ~/ros2_work_space
+cat << 'EOF' > .gitignore
+build/
+install/
+log/
+__pycache__/
+*.pyc
+*.egg-info/
+EOF
