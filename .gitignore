@@ -1,9 +1,13 @@
-cd ~/ros2_work_space
-cat << 'EOF' > .gitignore
+# ROS 2 build artifacts
 build/
 install/
 log/
+
+# Python caches
 __pycache__/
-*.pyc
+*.py[cod]
 *.egg-info/
-EOF
+
+# Simulator logs and large RL checkpoints
+MUJOCO_LOG.TXT
+rl_training/models/*.zip
