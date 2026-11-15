@@ -1,0 +1,15 @@
+# Core Physics Simulation & Numerics
+mujoco>=3.1.0
+numpy>=1.24.0,<3.0.0
+
+# Reinforcement Learning Stack
+gymnasium>=0.29.0
+stable-baselines3>=2.3.0
+torch>=2.1.0
+
+# Optional Standalone Visualization
+matplotlib>=3.9.0
+
+# Note: System-level dependencies installed via apt on Ubuntu 22.04:
+# - ros-humble-desktop (provides rclpy, std_msgs, std_srvs, geometry_msgs, sensor_msgs)
+# - python3-tk (provides tkinter for control_panel_gui.py)
