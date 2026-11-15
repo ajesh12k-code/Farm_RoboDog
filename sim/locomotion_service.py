@@ -1,88 +1,72 @@
 #!/usr/bin/env python3
-import math
+import os
+import sys
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Float64MultiArray
 from std_srvs.srv import Trigger
 
+sys.path.insert(0, os.path.dirname(__file__))
+from controllers.tripod_gait import TripodGaitGenerator
+from controllers.rl_balance_policy import RLBalanceController
+
 
 class LocomotionServiceNode(Node):
-    """Independent 18-DOF hexapod tripod gait service & command publisher."""
+    """Thin ROS 2 node switching between 23-DOF RL balance policy and tripod gait."""
 
     def __init__(self):
         super().__init__("farmdog6_locomotion_service")
-        self.vx = 0.0
-        self.vy = 0.0
-        self.is_held = False
-        self.remaining_phase = 0.0
-        self.gait_phase = 0.0
+        xml_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "models/KisaanuNexusFarmDog6/kisaanu_nexus_farm_dog6.xml")
+        )
+        self.dt = 0.02
+        self.gait = TripodGaitGenerator(self.dt)
+        self.rl = RLBalanceController(xml_path, self.dt)
+        self.prev_qpos = self.rl.data.qpos.copy()
+        self.curr_qpos = self.rl.data.qpos.copy()
 
-        self.leg_signs = [-1.0, 1.0, -1.0, 1.0, -1.0, 1.0]
-        self.tripod_phase = [0.0, math.pi, math.pi, 0.0, 0.0, math.pi]
+        if self.rl.policy_path:
+            self.get_logger().info(f"RL policy loaded: {self.rl.policy_path}")
+        else:
+            self.get_logger().warn("No RL checkpoint yet; using tripod gait.")
 
-        # Subscribe to velocity commands (linear.x = fwd/back, linear.y = left/right, angular.z > 0 = hold)
         self.create_subscription(Twist, "/farmdog6/cmd_vel", self.on_cmd_vel, 10)
-        # Service to trigger an immediate emergency stop
-        self.create_service(Trigger, "/farmdog6/stop_motion", self.handle_stop)
-        # Publish 18 leg joint targets at 100 Hz
+        self.create_subscription(Float64MultiArray, "/farmdog6/sim_qpos", self.on_qpos, 10)
+        self.create_service(Trigger, "/farmdog6/stop_motion", self.on_stop)
+
         self.leg_pub = self.create_publisher(Float64MultiArray, "/farmdog6/leg_targets", 10)
-        self.dt = 0.01
-        self.create_timer(self.dt, self.update_gait)
-        self.get_logger().info("Locomotion Service ready (/farmdog6/cmd_vel, /farmdog6/stop_motion).")
+        self.arm_pub = self.create_publisher(Float64MultiArray, "/farmdog6/rl_arm_targets", 10)
+        self.create_timer(self.dt, self.step)
+
+    def on_qpos(self, msg: Float64MultiArray):
+        if len(msg.data) == self.rl.model.nq:
+            self.prev_qpos = self.curr_qpos.copy()
+            self.curr_qpos[:] = msg.data
 
     def on_cmd_vel(self, msg: Twist):
-        if abs(msg.linear.x) < 1e-3 and abs(msg.linear.y) < 1e-3:
-            self.is_held = False
-            return
-        self.vx = float(msg.linear.x)
-        self.vy = float(msg.linear.y)
-        self.is_held = bool(msg.angular.z > 0.5)
-        if self.remaining_phase <= 0.05:
-            self.remaining_phase = 2.0 * math.pi
+        self.gait.set_command(float(msg.linear.x), float(msg.linear.y), msg.angular.z > 0.5)
 
-    def handle_stop(self, request, response):
-        self.is_held = False
-        self.remaining_phase = 0.0
-        self.vx = 0.0
-        self.vy = 0.0
-        response.success = True
-        response.message = "Locomotion halted."
+    def on_stop(self, request, response):
+        self.gait.stop()
+        self.rl.reset_arm_to_rest()
+        response.success, response.message = True, "Stopped; arm returning to rest."
         return response
 
-    def update_gait(self):
-        active = self.is_held or (self.remaining_phase > 0.0)
-        if active and math.hypot(self.vx, self.vy) > 1e-3:
-            d_phase = 2.0 * math.pi * 1.8 * self.dt
-            self.gait_phase = (self.gait_phase + d_phase) % (2.0 * math.pi)
-            if not self.is_held:
-                self.remaining_phase = max(0.0, self.remaining_phase - d_phase)
-                if self.remaining_phase == 0.0:
-                    self.vx = 0.0
-                    self.vy = 0.0
+    def step(self):
+        use_rl = (self.rl.policy is not None) and self.gait.is_active and (self.gait.vx > 0.1) and (abs(self.gait.vy) < 0.1)
+        if use_rl:
+            if not self.gait.is_held:
+                self.gait.remaining_phase = max(0.0, self.gait.remaining_phase - 0.226)
+                if self.gait.remaining_phase == 0.0:
+                    self.gait.vx = 0.0
+            arm_targets, leg_targets = self.rl.predict(self.prev_qpos, self.curr_qpos)
         else:
-            self.gait_phase = 0.0
+            leg_targets = self.gait.step()
+            arm_targets = self.rl.reset_arm_to_rest()
 
-        targets = []
-        for i in range(6):
-            side = self.leg_signs[i]
-            base_hip, base_thigh, base_calf = side * 0.12, 0.80, -1.60
-            if not active or math.hypot(self.vx, self.vy) < 1e-3:
-                targets.extend([base_hip, base_thigh, base_calf])
-                continue
-
-            phase = self.gait_phase + self.tripod_phase[i]
-            swing = math.sin(phase)
-            lift = max(0.0, math.cos(phase))
-            targets.extend([
-                base_hip + 0.22 * self.vy * swing,
-                base_thigh - 0.28 * self.vx * swing - 0.15 * lift,
-                base_calf - 0.42 * lift,
-            ])
-
-        msg = Float64MultiArray()
-        msg.data = targets
-        self.leg_pub.publish(msg)
+        self.leg_pub.publish(Float64MultiArray(data=leg_targets))
+        self.arm_pub.publish(Float64MultiArray(data=arm_targets))
 
 
 def main():
