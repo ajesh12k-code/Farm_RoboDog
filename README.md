@@ -15,6 +15,7 @@ A modular **ROS 2 Humble + MuJoCo + Gymnasium + Stable-Baselines3** simulation a
 
 ## Repository Structure
 
+```text
 ros2_work_space/
 ├── requirements.txt                         # Python dependencies (MuJoCo, Gymnasium, SB3)
 ├── README.md                                # System overview, architecture, and usage guide
