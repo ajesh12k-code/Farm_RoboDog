@@ -1,4 +1,4 @@
-# KisaanuNexusFarmDog6 — Agricultural Hexapod Mobile Manipulator
+# FarmDog6 — Agricultural Hexapod Mobile Manipulator
 
 A modular **ROS 2 Humble + MuJoCo + Gymnasium + Stable-Baselines3** simulation and control workspace for **KisaanuNexusFarmDog6**, a 25-DOF 6-legged agricultural robot engineered for uneven farm terrain, low soil compaction, active dorsal-arm balance stabilization, and autonomous crop harvesting.
 
