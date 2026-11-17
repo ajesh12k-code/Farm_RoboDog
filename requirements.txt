@@ -1,6 +1,9 @@
 # Core Physics Simulation & Numerics
-mujoco>=3.1.0
+mujoco>=3.3,<3.4  # MjSpec scene building (sim/controllers/farm_scene.py)
 numpy>=1.24.0,<3.0.0
+
+# Browser console bridge (sim/web_bridge.py)
+websockets>=13.1,<14
 
 # Reinforcement Learning Stack
 gymnasium>=0.29.0

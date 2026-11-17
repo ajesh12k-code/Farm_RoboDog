@@ -1,96 +1,217 @@
 #!/usr/bin/env python3
+"""Atharv Nandi arm arbitration node: RL balance targets, manual override, or IK auto-harvest.
+
+Modes (/nandi/harvest_status "mode"):
+    rl_balance  arm follows /nandi/rl_arm_targets (locomotion); default
+    manual      arm follows /nandi/manual_arm until /nandi/release_arm
+    ik_harvest  HarvestSequence (controllers/harvest_logic.py) owns the arm in a worker thread
+
+Threading: rclpy callbacks run on the executor thread, the harvest sequence on its own thread.
+All shared state is guarded by self.lock; everything is published from the executor thread (timer).
+"""
 import os
 import sys
-import math
-import time
 import threading
+
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float64MultiArray
+from std_msgs.msg import Float64MultiArray, String
 from std_srvs.srv import Trigger
 
 sys.path.insert(0, os.path.dirname(__file__))
+from controllers import harvest_logic as hl
 from controllers.arm_ik_solver import DorsalArmIKSolver
+from controllers.farm_scene import CROP_RADIUS, crop_body_names, load_farm_model
+
+PUBLISH_DT = 0.02
+# Max change of the published arm command per tick (gantry m/s, joints rad/s, fingers m/s) so mode
+# switches and slider jumps never slam the arm.
+SLEW_PER_TICK = (np.array([0.5, 3.0, 3.0, 3.0, 3.0, 0.1, 0.1]) * PUBLISH_DT).tolist()
+
+
+class _NodeIO:
+    """HarvestSequence I/O bound to the node: latest qpos in, arm goal out, abortable waits."""
+
+    def __init__(self, node: "HarvestIKServiceNode", abort: threading.Event):
+        self.node, self.abort = node, abort
+
+    def qpos(self) -> np.ndarray:
+        with self.node.lock:
+            return self.node.latest_qpos.copy()
+
+    def command(self, arm7):
+        with self.node.lock:
+            if self.abort.is_set():
+                raise hl.HarvestAborted()
+            self.node.arm_goal = list(arm7)
+
+    def wait(self, seconds: float):
+        if self.abort.wait(seconds):
+            raise hl.HarvestAborted()
+
+    def phase(self, name: str):
+        with self.node.lock:
+            if not self.abort.is_set():
+                self.node.phase = name
+                self.node.status_dirty = True
 
 
 class HarvestIKServiceNode(Node):
-    """Thin ROS 2 node switching between RL arm stabilization and IK pick-and-place."""
-
     def __init__(self):
-        super().__init__("farmdog6_harvest_ik_service")
-        xml_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "models/KisaanuNexusFarmDog6/kisaanu_nexus_farm_dog6.xml")
-        )
-        self.ik = DorsalArmIKSolver(xml_path)
-        self.latest_qpos = self.ik.data.qpos.copy()
-        self.arm_cmd = [0.0, 0.0, 0.1, -1.8, 1.4, 0.0, 0.0]
-        self.mode = "rl_balance"  # 'rl_balance' | 'ik_harvest' | 'manual'
+        super().__init__("nandi_harvest_ik_service")
+        model = load_farm_model()
+        self.ik = DorsalArmIKSolver(model)  # used only by the (single) harvest thread
+        self.crops = crop_body_names(model)
+        self.nq = model.nq
 
-        self.create_subscription(Float64MultiArray, "/farmdog6/sim_qpos", self.on_qpos, 10)
-        self.create_subscription(Float64MultiArray, "/farmdog6/rl_arm_targets", self.on_rl_arm, 10)
-        self.create_subscription(Float64MultiArray, "/farmdog6/manual_arm", self.on_manual, 10)
-        self.arm_pub = self.create_publisher(Float64MultiArray, "/farmdog6/arm_targets", 10)
-        self.create_timer(0.02, lambda: self.arm_pub.publish(Float64MultiArray(data=self.arm_cmd)))
-        self.create_service(Trigger, "/farmdog6/auto_harvest", self.on_auto_harvest)
+        self.lock = threading.Lock()
+        self.latest_qpos = self.ik.data.qpos.copy()  # home keyframe until sim_runner publishes
+        self.have_qpos = False
+        self.arm_goal = list(hl.REST_ARM)
+        self.arm_out = list(hl.REST_ARM)
+        self.mode, self.phase, self.target, self.last_result = "rl_balance", "idle", None, ""
+        self.abort = threading.Event()
+        self.worker = None  # last harvest thread; a new run waits until it has fully exited
+        self.status_dirty = True
 
+        opening = self.ik.gripper_opening()
+        if opening < 2 * CROP_RADIUS:
+            self.get_logger().warn(
+                f"Gripper opens {opening * 100:.1f} cm but crops are {2 * CROP_RADIUS * 100:.1f} cm wide: "
+                "grasps will fail (and be reported as failed); check the finger geometry in the robot MJCF."
+            )
+
+        self.create_subscription(Float64MultiArray, "/nandi/sim_qpos", self.on_qpos, 10)
+        self.create_subscription(Float64MultiArray, "/nandi/rl_arm_targets", self.on_rl_arm, 10)
+        self.create_subscription(Float64MultiArray, "/nandi/manual_arm", self.on_manual, 10)
+        self.arm_pub = self.create_publisher(Float64MultiArray, "/nandi/arm_targets", 10)
+        self.status_pub = self.create_publisher(String, "/nandi/harvest_status", 10)
+        self.create_service(Trigger, "/nandi/auto_harvest", self.on_auto_harvest)
+        self.create_service(Trigger, "/nandi/release_arm", self.on_release_arm)
+        self.create_timer(PUBLISH_DT, self.on_tick)
+        self.create_timer(0.5, self.on_status_timer)
+        self.get_logger().info(f"Harvest IK ready: {len(self.crops)} crops, nq={self.nq}.")
+
+    # ------------------------------------------------------------------ subscriptions
     def on_qpos(self, msg: Float64MultiArray):
-        if len(msg.data) == self.ik.model.nq:
-            self.latest_qpos[:] = msg.data
+        if len(msg.data) != self.nq:
+            return
+        q = np.array(msg.data, dtype=np.float64)
+        with self.lock:
+            reset = self.have_qpos and hl.world_reset_detected(self.latest_qpos, q)
+            self.latest_qpos, self.have_qpos = q, True
+            if reset:
+                self._world_reset_locked()
+
+    def _world_reset_locked(self):
+        """The world jumped back to the keyframe (/nandi/reset_world): stand the arm down at rest.
+
+        Snaps the slewed command too: slewing from the pre-reset pose would drive the freshly reset arm
+        back out over the reset crops. sim_runner's release_arm call arrives later and is then a no-op.
+        """
+        if self.mode == "ik_harvest":
+            self.abort.set()
+            self.last_result = f"World reset: harvest of {self.target} aborted"
+        self.mode, self.phase, self.target = "rl_balance", "idle", None
+        self.arm_goal = list(hl.REST_ARM)
+        self.arm_out = list(hl.REST_ARM)  # == home keyframe arm ctrl
+        self.status_dirty = True
 
     def on_rl_arm(self, msg: Float64MultiArray):
-        if self.mode == "rl_balance" and len(msg.data) == 5:
-            self.arm_cmd = [*msg.data, 0.0, 0.0]
+        if len(msg.data) != 5:
+            return
+        with self.lock:
+            if self.mode == "rl_balance":
+                self.arm_goal = [*msg.data, self.ik.grip_open, self.ik.grip_open]
 
     def on_manual(self, msg: Float64MultiArray):
-        if len(msg.data) == 7:
-            self.mode, self.arm_cmd = "manual", list(msg.data)
+        if len(msg.data) != 7:
+            return
+        with self.lock:
+            if self.mode == "ik_harvest":  # operator override wins over a running harvest
+                self.abort.set()
+                self.last_result = f"Manual override: harvest of {self.target} aborted"
+            if self.mode != "manual":
+                self.mode, self.phase, self.target = "manual", "idle", None
+                self.status_dirty = True
+            self.arm_goal = list(msg.data)
 
-    def _move(self, target_5: np.ndarray, grip: float, duration: float = 0.8):
-        start_5, start_g = np.array(self.arm_cmd[:5]), float(self.arm_cmd[5])
-        steps = max(1, int(duration / 0.02))
-        for s in range(1, steps + 1):
-            if self.mode != "ik_harvest":
-                return
-            a = 0.5 * (1.0 - math.cos(math.pi * s / steps))
-            q = (1.0 - a) * start_5 + a * target_5
-            g = (1.0 - a) * start_g + a * grip
-            self.arm_cmd = [*q.tolist(), g, g]
-            time.sleep(0.02)
+    # ------------------------------------------------------------------ services
+    def on_release_arm(self, request, response):
+        with self.lock:
+            prev = self.mode
+            if prev == "ik_harvest":
+                self.abort.set()
+                self.last_result = f"Released: harvest of {self.target} aborted"
+            self.mode, self.phase, self.target = "rl_balance", "idle", None
+            self.arm_goal = list(hl.REST_ARM)  # locomotion's rl_arm_targets take over from here
+            self.status_dirty = True
+        response.success = True
+        response.message = {
+            "rl_balance": "Arm already in RL balance mode",
+            "manual": "Manual arm released to RL balance",
+            "ik_harvest": "Harvest aborted; arm released to RL balance",
+        }[prev]
+        return response
 
     def on_auto_harvest(self, request, response):
-        if self.mode == "ik_harvest":
-            response.success, response.message = False, "Harvest already running."
-            return response
-
-        trunk_pos, trunk_rot, crop_pos = self.ik.get_scene_poses(self.latest_qpos)
-        dist = float(np.linalg.norm(crop_pos[:2] - trunk_pos[:2]))
-        if dist > 1.08:
-            response.success, response.message = False, f"Crop too far ({dist:.2f}m)."
-            return response
-
-        self.mode = "ik_harvest"
-
-        def _sequence():
-            try:
-                q1 = self.ik.solve(self.latest_qpos, crop_pos + [0.0, 0.0, 0.09], np.array([0.24, 0.0, 1.35, -0.55, -0.80]))
-                self._move(q1, 0.0, 0.9)
-                q2 = self.ik.solve(self.latest_qpos, crop_pos + [0.0, 0.0, 0.004], q1)
-                self._move(q2, 0.0, 0.6)
-                self._move(q2, 0.019, 0.4)
-                q3 = self.ik.solve(self.latest_qpos, crop_pos + [0.0, 0.0, 0.34], q2)
-                self._move(q3, 0.019, 0.7)
-                basket_pt = trunk_pos + (trunk_rot @ np.array([-0.14, 0.0, 0.24]))
-                q4 = self.ik.solve(self.latest_qpos, basket_pt, np.array([-0.16, 0.0, 0.70, -1.60, 0.60]))
-                self._move(q4, 0.019, 0.9)
-                self._move(q4, 0.0, 0.4)
-                self._move(np.array([0.0, 0.0, 0.1, -1.8, 1.4]), 0.0, 0.7)
-            finally:
-                self.mode = "rl_balance"
-
-        threading.Thread(target=_sequence, daemon=True).start()
-        response.success, response.message = True, "Switched to IK: harvesting crop."
+        with self.lock:
+            if self.mode == "ik_harvest":
+                response.success, response.message = False, f"Harvest already running ({self.target})"
+                return response
+            if self.worker is not None and self.worker.is_alive():
+                # An aborted run can still be inside ik.solve(); the solver's MjData is not thread-safe.
+                response.success, response.message = False, "Previous harvest still stopping - try again"
+                return response
+            if not self.have_qpos:
+                response.success, response.message = False, "No sim state yet (is sim_runner running?)"
+                return response
+            target, message = hl.select_target(self.latest_qpos, self.crops)
+            if target is None:
+                self.last_result, self.status_dirty = message, True
+                response.success, response.message = False, message
+                return response
+            self.abort = abort = threading.Event()
+            self.mode, self.phase, self.target = "ik_harvest", "approach", target
+            self.status_dirty = True
+            start_cmd = list(self.arm_out)
+            self.worker = threading.Thread(target=self._run_harvest, args=(target, abort, start_cmd), daemon=True)
+            self.worker.start()
+        response.success, response.message = True, message
         return response
+
+    def _run_harvest(self, target: str, abort: threading.Event, start_cmd):
+        try:
+            ok, message = hl.HarvestSequence(self.ik, _NodeIO(self, abort)).run(target, start_cmd)
+        except Exception as exc:  # never leave the arm stuck in ik_harvest
+            ok, message = False, f"Harvest error: {exc}"
+        with self.lock:
+            if abort.is_set():  # aborted: release_arm / manual already own the arm and the status
+                return
+            abort.set()
+            self.mode, self.phase, self.target, self.last_result = "rl_balance", "idle", None, message
+            self.arm_goal = list(hl.REST_ARM)
+            self.status_dirty = True
+        log = self.get_logger().info if ok else self.get_logger().warn
+        log(message)
+
+    # ------------------------------------------------------------------ timers (publish here only)
+    def on_tick(self):
+        with self.lock:
+            self.arm_out = hl.slew(self.arm_out, self.arm_goal, SLEW_PER_TICK)
+            out = self.arm_out
+            status = None
+            if self.status_dirty:
+                status = hl.status_json(self.mode, self.phase, self.target, self.last_result)
+                self.status_dirty = False
+        self.arm_pub.publish(Float64MultiArray(data=out))
+        if status is not None:
+            self.status_pub.publish(String(data=status))
+
+    def on_status_timer(self):
+        with self.lock:
+            self.status_dirty = True
 
 
 def main():

@@ -3,11 +3,28 @@ build/
 install/
 log/
 
-# Python caches
+# Python caches and tooling
 __pycache__/
 *.py[cod]
 *.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.venv/
+venv/
 
-# Simulator logs and large RL checkpoints
+# Simulator logs, core dumps and RL artifacts (policies are trained locally, never committed)
 MUJOCO_LOG.TXT
+core
 rl_training/models/*.zip
+rl_training/logs/
+rl_training/tensorboard/
+
+# Editor / OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp

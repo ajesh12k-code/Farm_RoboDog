@@ -1,0 +1,4 @@
+# ROS-free unit tests (Python 3.11). The live nodes need ROS 2 Humble: see docker/.
+mujoco>=3.3,<3.4
+numpy>=1.24,<2
+pytest>=7

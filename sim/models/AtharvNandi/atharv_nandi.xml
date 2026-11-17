@@ -1,0 +1,214 @@
+<mujoco model="AtharvNandi">
+  <compiler angle="radian" autolimits="true"/>
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicitfast"/>
+
+  <default>
+    <joint damping="1.5" armature="0.02"/>
+    <geom friction="1.2 0.02 0.01" rgba="0.2 0.55 0.25 1"/>
+    <position kp="120" kv="4.0" ctrlrange="-2.8 2.8" forcerange="-85 85"/>
+  </default>
+
+  <asset>
+    <texture type="2d" name="farm_soil" builtin="checker" width="512" height="512" rgb1="0.24 0.18 0.12" rgb2="0.28 0.21 0.14"/>
+    <material name="soil_mat" texture="farm_soil" texrepeat="12 12" reflectance="0.05"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 4" dir="0 0 -1" diffuse="0.95 0.95 0.9"/>
+    <geom name="floor" type="plane" size="25 25 0.1" material="soil_mat"/>
+
+    <!-- Uneven Farm Terrain Test Bumps -->
+    <geom name="ridge_1" type="box" pos="1.4 0 0.02" size="0.15 1.5 0.02" rgba="0.3 0.22 0.15 1"/>
+    <geom name="ridge_2" type="box" pos="2.2 0 0.03" size="0.18 1.5 0.03" rgba="0.3 0.22 0.15 1"/>
+
+    <!-- Main Hexapod Chassis FIRST so qpos[0..6] is trunk root -->
+    <body name="trunk" pos="0 0 0.34">
+      <freejoint name="root"/>
+      <geom name="trunk_geom" type="box" size="0.34 0.14 0.05" mass="12.5" rgba="0.14 0.28 0.16 1"/>
+
+      <!-- Full-Length Top Cargo Basket (0.64m long x 0.24m wide, clear of all 6 legs) -->
+      <body name="dorsal_basket" pos="0 0 0.055">
+        <geom name="basket_floor" type="box" pos="0 0 0" size="0.32 0.12 0.006" mass="0.4" rgba="0.85 0.65 0.2 1"/>
+        <geom name="basket_front" type="box" pos="0.314 0 0.035" size="0.006 0.12 0.035" mass="0.1" rgba="0.85 0.65 0.2 1"/>
+        <geom name="basket_rear" type="box" pos="-0.314 0 0.035" size="0.006 0.12 0.035" mass="0.1" rgba="0.85 0.65 0.2 1"/>
+        <geom name="basket_left_wall" type="box" pos="0 0.114 0.035" size="0.32 0.006 0.035" mass="0.15" rgba="0.85 0.65 0.2 1"/>
+        <geom name="basket_right_wall" type="box" pos="0 -0.114 0.035" size="0.32 0.006 0.035" mass="0.15" rgba="0.85 0.65 0.2 1"/>
+      </body>
+
+      <!-- Elevated Dorsal Gantry Rail spanning full length above the top basket -->
+      <geom name="gantry_pillar_front" type="box" pos="0.314 0 0.11" size="0.012 0.025 0.025" mass="0.1" rgba="0.35 0.37 0.4 1"/>
+      <geom name="gantry_pillar_rear" type="box" pos="-0.314 0 0.11" size="0.012 0.025 0.025" mass="0.1" rgba="0.35 0.37 0.4 1"/>
+      <geom name="gantry_rail" type="box" pos="0 0 0.135" size="0.326 0.022 0.01" mass="0.5" rgba="0.4 0.42 0.45 1"/>
+
+      <!-- Sliding Carriage + Extended Ground-Reaching 4-DOF Harvesting Arm (0.34m + 0.34m) -->
+      <body name="arm_carriage" pos="0.05 0 0.155">
+        <joint name="gantry_slide" type="slide" axis="1 0 0" range="-0.26 0.26" damping="10.0"/>
+        <geom type="box" size="0.042 0.038 0.015" mass="0.35" rgba="0.9 0.45 0.1 1"/>
+
+        <body name="arm_turret" pos="0 0 0.022">
+          <joint name="arm_yaw" type="hinge" axis="0 0 1" range="-3.14 3.14"/>
+          <geom type="cylinder" size="0.03 0.018" mass="0.2" rgba="0.2 0.2 0.22 1"/>
+
+          <body name="arm_upper" pos="0 0 0.018">
+            <joint name="arm_shoulder" type="hinge" axis="0 1 0" range="-1.6 2.4"/>
+            <geom type="capsule" fromto="0 0 0 0 0 0.34" size="0.019" mass="0.28" rgba="0.9 0.45 0.1 1"/>
+
+            <body name="arm_forearm" pos="0 0 0.34">
+              <joint name="arm_elbow" type="hinge" axis="0 1 0" range="-2.6 2.6"/>
+              <geom type="capsule" fromto="0 0 0 0.34 0 0" size="0.015" mass="0.22" rgba="0.25 0.25 0.28 1"/>
+
+              <body name="arm_wrist" pos="0.34 0 0">
+                <joint name="arm_wrist_pitch" type="hinge" axis="0 1 0" range="-2.0 2.0"/>
+                <geom type="box" pos="0.025 0 0" size="0.025 0.035 0.015" mass="0.1" rgba="0.9 0.45 0.1 1"/>
+                <site name="gripper_tip" pos="0.065 0 0" size="0.008" rgba="1 0 0 1"/>
+
+                <body name="finger_left" pos="0.05 0.05 0">
+                  <joint name="finger_left_joint" type="slide" axis="0 -1 0" range="0.0 0.04" damping="2.0"/>
+                  <geom type="box" pos="0.03 0 0" size="0.035 0.005 0.012" mass="0.025" rgba="0.15 0.15 0.15 1"/>
+                </body>
+                <body name="finger_right" pos="0.05 -0.05 0">
+                  <joint name="finger_right_joint" type="slide" axis="0 1 0" range="0.0 0.04" damping="2.0"/>
+                  <geom type="box" pos="0.03 0 0" size="0.035 0.005 0.012" mass="0.025" rgba="0.15 0.15 0.15 1"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <!-- ================= 6 LOCOMOTION LEGS ================= -->
+      <!-- 1. Front-Right (FR) -->
+      <body name="FR_hip" pos="0.26 -0.14 0">
+        <joint name="FR_hip_joint" type="hinge" axis="1 0 0" range="-0.7 0.7"/>
+        <geom type="cylinder" fromto="0 0 0 0 -0.065 0" size="0.035" mass="0.6"/>
+        <body name="FR_thigh" pos="0 -0.065 0">
+          <joint name="FR_thigh_joint" type="hinge" axis="0 1 0" range="-1.5 2.5"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.026" mass="0.9"/>
+          <body name="FR_calf" pos="0 0 -0.23">
+            <joint name="FR_calf_joint" type="hinge" axis="0 1 0" range="-2.6 -0.5"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.021" mass="0.35" rgba="0.85 0.45 0.1 1"/>
+            <geom name="FR_foot" type="sphere" pos="0 0 -0.23" size="0.03" mass="0.08" rgba="0.1 0.1 0.1 1"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- 2. Front-Left (FL) -->
+      <body name="FL_hip" pos="0.26 0.14 0">
+        <joint name="FL_hip_joint" type="hinge" axis="1 0 0" range="-0.7 0.7"/>
+        <geom type="cylinder" fromto="0 0 0 0 0.065 0" size="0.035" mass="0.6"/>
+        <body name="FL_thigh" pos="0 0.065 0">
+          <joint name="FL_thigh_joint" type="hinge" axis="0 1 0" range="-1.5 2.5"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.026" mass="0.9"/>
+          <body name="FL_calf" pos="0 0 -0.23">
+            <joint name="FL_calf_joint" type="hinge" axis="0 1 0" range="-2.6 -0.5"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.021" mass="0.35" rgba="0.85 0.45 0.1 1"/>
+            <geom name="FL_foot" type="sphere" pos="0 0 -0.23" size="0.03" mass="0.08" rgba="0.1 0.1 0.1 1"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- 3. Middle-Right (MR) -->
+      <body name="MR_hip" pos="0.0 -0.15 0">
+        <joint name="MR_hip_joint" type="hinge" axis="1 0 0" range="-0.7 0.7"/>
+        <geom type="cylinder" fromto="0 0 0 0 -0.065 0" size="0.035" mass="0.6"/>
+        <body name="MR_thigh" pos="0 -0.065 0">
+          <joint name="MR_thigh_joint" type="hinge" axis="0 1 0" range="-1.5 2.5"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.026" mass="0.9"/>
+          <body name="MR_calf" pos="0 0 -0.23">
+            <joint name="MR_calf_joint" type="hinge" axis="0 1 0" range="-2.6 -0.5"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.021" mass="0.35" rgba="0.85 0.45 0.1 1"/>
+            <geom name="MR_foot" type="sphere" pos="0 0 -0.23" size="0.03" mass="0.08" rgba="0.1 0.1 0.1 1"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- 4. Middle-Left (ML) -->
+      <body name="ML_hip" pos="0.0 0.15 0">
+        <joint name="ML_hip_joint" type="hinge" axis="1 0 0" range="-0.7 0.7"/>
+        <geom type="cylinder" fromto="0 0 0 0 0.065 0" size="0.035" mass="0.6"/>
+        <body name="ML_thigh" pos="0 0.065 0">
+          <joint name="ML_thigh_joint" type="hinge" axis="0 1 0" range="-1.5 2.5"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.026" mass="0.9"/>
+          <body name="ML_calf" pos="0 0 -0.23">
+            <joint name="ML_calf_joint" type="hinge" axis="0 1 0" range="-2.6 -0.5"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.021" mass="0.35" rgba="0.85 0.45 0.1 1"/>
+            <geom name="ML_foot" type="sphere" pos="0 0 -0.23" size="0.03" mass="0.08" rgba="0.1 0.1 0.1 1"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- 5. Rear-Right (RR) -->
+      <body name="RR_hip" pos="-0.26 -0.14 0">
+        <joint name="RR_hip_joint" type="hinge" axis="1 0 0" range="-0.7 0.7"/>
+        <geom type="cylinder" fromto="0 0 0 0 -0.065 0" size="0.035" mass="0.6"/>
+        <body name="RR_thigh" pos="0 -0.065 0">
+          <joint name="RR_thigh_joint" type="hinge" axis="0 1 0" range="-1.5 2.5"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.026" mass="0.9"/>
+          <body name="RR_calf" pos="0 0 -0.23">
+            <joint name="RR_calf_joint" type="hinge" axis="0 1 0" range="-2.6 -0.5"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.021" mass="0.35" rgba="0.85 0.45 0.1 1"/>
+            <geom name="RR_foot" type="sphere" pos="0 0 -0.23" size="0.03" mass="0.08" rgba="0.1 0.1 0.1 1"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- 6. Rear-Left (RL) -->
+      <body name="RL_hip" pos="-0.26 0.14 0">
+        <joint name="RL_hip_joint" type="hinge" axis="1 0 0" range="-0.7 0.7"/>
+        <geom type="cylinder" fromto="0 0 0 0 0.065 0" size="0.035" mass="0.6"/>
+        <body name="RL_thigh" pos="0 0.065 0">
+          <joint name="RL_thigh_joint" type="hinge" axis="0 1 0" range="-1.5 2.5"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.026" mass="0.9"/>
+          <body name="RL_calf" pos="0 0 -0.23">
+            <joint name="RL_calf_joint" type="hinge" axis="0 1 0" range="-2.6 -0.5"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.021" mass="0.35" rgba="0.85 0.45 0.1 1"/>
+            <geom name="RL_foot" type="sphere" pos="0 0 -0.23" size="0.03" mass="0.08" rgba="0.1 0.1 0.1 1"/>
+          </body>
+        </body>
+      </body>
+    </body>
+
+    <!-- Test Produce Item on Ground in front of robot -->
+    <body name="crop_item_1" pos="0.62 0.0 0.035">
+      <freejoint name="crop_freejoint"/>
+      <geom type="sphere" size="0.035" mass="0.15" rgba="0.9 0.15 0.15 1" friction="1.2 0.05 0.01"/>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <!-- Dorsal Gantry & Arm Actuators (Indices 0..6) -->
+    <position name="gantry_slide" joint="gantry_slide" kp="150" kv="10" ctrlrange="-0.26 0.26" forcerange="-80 80"/>
+    <position name="arm_yaw" joint="arm_yaw" kp="45" kv="2.5" ctrlrange="-3.14 3.14"/>
+    <position name="arm_shoulder" joint="arm_shoulder" kp="70" kv="3.5" ctrlrange="-1.6 2.4"/>
+    <position name="arm_elbow" joint="arm_elbow" kp="60" kv="3.0" ctrlrange="-2.6 2.6"/>
+    <position name="arm_wrist_pitch" joint="arm_wrist_pitch" kp="35" kv="1.8" ctrlrange="-2.0 2.0"/>
+    <position name="finger_left" joint="finger_left_joint" kp="80" kv="2" ctrlrange="0.0 0.04" forcerange="-25 25"/>
+    <position name="finger_right" joint="finger_right_joint" kp="80" kv="2" ctrlrange="0.0 0.04" forcerange="-25 25"/>
+
+    <!-- 18 Leg Actuators (Indices 7..24) -->
+    <position name="FR_hip" joint="FR_hip_joint"/>
+    <position name="FR_thigh" joint="FR_thigh_joint"/>
+    <position name="FR_calf" joint="FR_calf_joint"/>
+    <position name="FL_hip" joint="FL_hip_joint"/>
+    <position name="FL_thigh" joint="FL_thigh_joint"/>
+    <position name="FL_calf" joint="FL_calf_joint"/>
+    <position name="MR_hip" joint="MR_hip_joint"/>
+    <position name="MR_thigh" joint="MR_thigh_joint"/>
+    <position name="MR_calf" joint="MR_calf_joint"/>
+    <position name="ML_hip" joint="ML_hip_joint"/>
+    <position name="ML_thigh" joint="ML_thigh_joint"/>
+    <position name="ML_calf" joint="ML_calf_joint"/>
+    <position name="RR_hip" joint="RR_hip_joint"/>
+    <position name="RR_thigh" joint="RR_thigh_joint"/>
+    <position name="RR_calf" joint="RR_calf_joint"/>
+    <position name="RL_hip" joint="RL_hip_joint"/>
+    <position name="RL_thigh" joint="RL_thigh_joint"/>
+    <position name="RL_calf" joint="RL_calf_joint"/>
+  </actuator>
+
+  <keyframe>
+    <key name="home"
+         qpos="0 0 0.34 1 0 0 0  0.0 0.0 0.1 -1.8 1.4 0.0 0.0  -0.12 0.80 -1.60  0.12 0.80 -1.60  -0.12 0.80 -1.60  0.12 0.80 -1.60  -0.12 0.80 -1.60  0.12 0.80 -1.60  0.62 0.0 0.035 1 0 0 0"
+         ctrl="0.0 0.0 0.1 -1.8 1.4 0.0 0.0  -0.12 0.80 -1.60  0.12 0.80 -1.60  -0.12 0.80 -1.60  0.12 0.80 -1.60  -0.12 0.80 -1.60  0.12 0.80 -1.60"/>
+  </keyframe>
+</mujoco>
