@@ -1,0 +1,47 @@
+# HARVEST / PICK mango: CLIP (T2), one round, all mature in-band fruit (MISSION-PRESETS 5).
+# Times: WP8 TreeRunner on OT-1 (assisted station_teleport): mount + 3 picks in 74.2 s sim (runner, 2026-11-18;
+# the WP8 cycle_s 11.7-11.9 s excludes the station move, place and park); tool change A -> B 9.0 s (WP2).
+schema: nandi.preset/1
+id: harvest_mango
+mode: harvest_tree
+version: 1
+kind: contact
+title: "HARVEST mango (clip, one round)"
+season: harvest_mango
+crops: [mango]
+targets: [tree_ids]
+crown: none
+weather: contact
+slope_limit_deg: 3.0                # dwell <= 3 deg (MP 5 preconditions)
+method: clip
+tool: T2
+params:
+  method: {default: clip, enum: [clip]}
+  max_items: {default: 8, min: 1, max: 8}                  # 8-cell desap tray
+  expected_n: {default: 3, min: 0, max: 8}                 # in-band mature fruit from FRUIT SCOUT (reachable_n)
+  pedicel_leave_cm: {default: 2.0, min: 1.0, max: 5.0}     # project brief; OQ-04
+  per_item_s: {default: 20.0, min: 5.0, max: 60.0}         # OS 1.2 budget 20 s; WP8 run 74.2 s for mount + 3 (runner)
+  tool_change_s: {default: 9.0, min: 0.0, max: 30.0}       # measured 9.0 s A -> B (WP2)
+  fruit_kg: {default: 0.25, min: 0.05, max: 1.0}           # assumption, Dashehari
+preconditions: [ready_common, tool_in_rack, payload_room, no_wet_foliage, crop_profile, scout_fresh_or_inline,
+                dwell_slope, fruit_not_bagged, crop_in_mvp]
+steps:
+  - "Tool change to CLIPPER (phase stepper, beacon blue)"
+  - "Per target: select -> stem estimate -> roll align -> trap -> close -> cut at cut_k -> hold verify -> place stalk-down in its own cell -> rest"
+  - "Mature fruit out of band -> MARK"
+  - "UNLOAD when the tray is full or the payload is reached"
+interlocks: [blade_jaw_interlock, work_field_person, stability, no_tool_change_holding, payload_3kg, base_drift_2cm]
+outputs: [harvest_records, marks, tree_record_harvest]
+kpis: [O-10, O-11, O-12, O-15, O-16, blade_fruit_0, fruit_on_fruit_0, cycle_clip_20s]
+retry: {per_target: 1, cut_not_fired: realign_10deg, twist_failed: mark}
+gates:
+  - {kind: dwell, ext_m: 0.0, dwell_s: $per_item_s}
+  - {kind: dwell, ext_m: 0.0, dwell_s: 60.0}               # a whole tree round at one station is a long dwell
+estimate:
+  fixed_s: $tool_change_s
+  per_item_s: $per_item_s
+  items: $expected_n
+  disk_mb: 1.0
+payload: {per_item_kg: $fruit_kg, cells: 8}
+console: {tile: "HARVEST", icon: harvest, hi: "तुड़ाई आम", en: "Harvest mango", order: 6, group: tree_card,
+          show: [max_items], advanced: [pedicel_leave_cm, per_item_s]}

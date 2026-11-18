@@ -1,0 +1,1458 @@
+{
+ "schema": "nandi.field/1",
+ "classification": "Public",
+ "frame": {
+  "name": "nandi_local_v1",
+  "origin_note": "home at a fictitious location; rows along +x (no real site)"
+ },
+ "spacing": {
+  "basis": "OQ-02 B (2026-11-17): NHB high-density mango 5 x 2.5 m frozen (5 x 3 m is the alternative); WP0c config/fields/orchard_candidates.json positions",
+  "mango_row_pitch_m": 5.0,
+  "mango_in_row_m": 2.5,
+  "mango_alt_in_row_m": 3.0
+ },
+ "season": "demo_all_fruiting",
+ "season_note": "all four species fruit at once: not agronomically realistic (ORCHARD-MVP-SPEC 1.1); the run card and console say so",
+ "soil_type": "sandy loam, typical of the North India (UP) plain (assumption)",
+ "home": {
+  "xy": [
+   0.0,
+   0.0
+  ],
+  "yaw_deg": 0.0
+ },
+ "dock": {
+  "xy": [
+   0.0,
+   0.0
+  ],
+  "yaw_deg": 0.0,
+  "size_m": [
+   1.0,
+   0.8
+  ]
+ },
+ "crate": {
+  "xy": [
+   0.5,
+   -1.5
+  ],
+  "size_m": [
+   0.6,
+   0.4,
+   0.3
+  ],
+  "wall_m": 0.015
+ },
+ "world": "orchard_demo",
+ "kind": "orchard",
+ "label": "orchard_demo: OT-1 + R1 4 mango (NHB 5 x 2.5 m) + R2 4 guava + R3 4 papaya + R4 4 banana",
+ "geofence": [
+  [
+   -6.5,
+   -6.5
+  ],
+  [
+   16.8,
+   -6.5
+  ],
+  [
+   16.8,
+   17.5
+  ],
+  [
+   -6.5,
+   17.5
+  ]
+ ],
+ "rows": [
+  {
+   "row_id": "R1",
+   "block_id": "B1-mango-hdp",
+   "crop": "mango",
+   "y": 2.5,
+   "in_row_m": 2.5,
+   "alley_flat": true
+  },
+  {
+   "row_id": "R2",
+   "block_id": "B2-guava",
+   "crop": "guava",
+   "y": 7.5,
+   "in_row_m": 1.5,
+   "alley_flat": false
+  },
+  {
+   "row_id": "R3",
+   "block_id": "B3-papaya",
+   "crop": "papaya",
+   "y": 11.0,
+   "in_row_m": 1.8,
+   "alley_flat": false
+  },
+  {
+   "row_id": "R4",
+   "block_id": "B4-banana",
+   "crop": "banana",
+   "y": 14.5,
+   "in_row_m": 1.8,
+   "alley_flat": false
+  }
+ ],
+ "trees": [
+  {
+   "tree_id": "OT-1",
+   "physical_tag": "OT-1",
+   "block_id": "B0-mango-isolated",
+   "row_id": "OT",
+   "crop": "mango",
+   "cultivar": "Dashehari",
+   "form": "grafted",
+   "geo": {
+    "frame": "nandi_local_v1",
+    "x": 6.0,
+    "y": -3.5
+   },
+   "height_m": 2.2,
+   "canopy_r_m": 1.0,
+   "trunk_r_m": 0.06,
+   "trunk_h_m": 0.77,
+   "graft_union_h_m": 0.3,
+   "basin_r_m": 0.8,
+   "orbit_clear": true,
+   "orbit_standoff_m": 0.9,
+   "alley_sides": [
+    "all"
+   ],
+   "alley_clear_height_m": [
+    2.5,
+    2.5
+   ],
+   "skirt_h_m": 0.45,
+   "skirted_up": false,
+   "drip_line_offset_m": 0.0,
+   "rope_lines": [],
+   "props": [],
+   "fruit_set_date": "2026-03-25",
+   "bagging_date": null,
+   "ribbon_colour": null,
+   "shooting_date": null,
+   "last_visit": null,
+   "flags": [],
+   "seed": 1
+  },
+  {
+   "tree_id": "R1-1",
+   "physical_tag": "M-1",
+   "block_id": "B1-mango-hdp",
+   "row_id": "R1",
+   "crop": "mango",
+   "cultivar": "Dashehari",
+   "form": "grafted",
+   "geo": {
+    "frame": "nandi_local_v1",
+    "x": 2.0,
+    "y": 2.5
+   },
+   "height_m": 1.8,
+   "canopy_r_m": 0.81,
+   "trunk_r_m": 0.05,
+   "trunk_h_m": 0.63,
+   "graft_union_h_m": 0.3,
+   "basin_r_m": 0.8,
+   "orbit_clear": false,
+   "orbit_standoff_m": 0.9,
+   "alley_sides": [
+    "-y",
+    "+y"
+   ],
+   "alley_clear_height_m": [
+    2.5,
+    2.5
+   ],
+   "skirt_h_m": 0.45,
+   "skirted_up": false,
+   "drip_line_offset_m": -0.3,
+   "rope_lines": [],
+   "props": [],
+   "fruit_set_date": "2026-03-25",
+   "bagging_date": null,
+   "ribbon_colour": null,
+   "shooting_date": null,
+   "last_visit": null,
+   "flags": [],
+   "seed": 10
+  },
+  {
+   "tree_id": "R1-2",
+   "physical_tag": "M-2",
+   "block_id": "B1-mango-hdp",
+   "row_id": "R1",
+   "crop": "mango",
+   "cultivar": "Dashehari",
+   "form": "grafted",
+   "geo": {
+    "frame": "nandi_local_v1",
+    "x": 4.5,
+    "y": 2.5
+   },
+   "height_m": 2.2,
+   "canopy_r_m": 0.99,
+   "trunk_r_m": 0.055,
+   "trunk_h_m": 0.77,
+   "graft_union_h_m": 0.3,
+   "basin_r_m": 0.8,
+   "orbit_clear": false,
+   "orbit_standoff_m": 0.9,
+   "alley_sides": [
+    "-y",
+    "+y"
+   ],
+   "alley_clear_height_m": [
+    2.5,
+    2.5
+   ],
+   "skirt_h_m": 0.45,
+   "skirted_up": false,
+   "drip_line_offset_m": -0.3,
+   "rope_lines": [],
+   "props": [],
+   "fruit_set_date": "2026-03-25",
+   "bagging_date": null,
+   "ribbon_colour": null,
+   "shooting_date": null,
+   "last_visit": null,
+   "flags": [],
+   "seed": 11
+  },
+  {
+   "tree_id": "R1-3",
+   "physical_tag": "M-3",
+   "block_id": "B1-mango-hdp",
+   "row_id": "R1",
+   "crop": "mango",
+   "cultivar": "Amrapali",
+   "form": "grafted",
+   "geo": {
+    "frame": "nandi_local_v1",
+    "x": 7.0,
+    "y": 2.5
+   },
+   "height_m": 2.5,
+   "canopy_r_m": 1.1,
+   "trunk_r_m": 0.06,
+   "trunk_h_m": 0.875,
+   "graft_union_h_m": 0.3,
+   "basin_r_m": 0.8,
+   "orbit_clear": false,
+   "orbit_standoff_m": 0.9,
+   "alley_sides": [
+    "-y",
+    "+y"
+   ],
+   "alley_clear_height_m": [
+    2.5,
+    2.5
+   ],
+   "skirt_h_m": 0.45,
+   "skirted_up": false,
+   "drip_line_offset_m": -0.3,
+   "rope_lines": [],
+   "props": [],
+   "fruit_set_date": "2026-03-25",
+   "bagging_date": null,
+   "ribbon_colour": null,
+   "shooting_date": null,
+   "last_visit": null,
+   "flags": [],
+   "seed": 12
+  },
+  {
+   "tree_id": "R1-4",
+   "physical_tag": "M-4",
+   "block_id": "B1-mango-hdp",
+   "row_id": "R1",
+   "crop": "mango",
+   "cultivar": "Amrapali",
+   "form": "grafted",
+   "geo": {
+    "frame": "nandi_local_v1",
+    "x": 9.5,
+    "y": 2.5
+   },
+   "height_m": 2.8,
+   "canopy_r_m": 1.1,
+   "trunk_r_m": 0.065,
+   "trunk_h_m": 0.98,
+   "graft_union_h_m": 0.3,
+   "basin_r_m": 0.8,
+   "orbit_clear": false,
+   "orbit_standoff_m": 0.9,
+   "alley_sides": [
+    "-y",
+    "+y"
+   ],
+   "alley_clear_height_m": [
+    2.5,
+    2.5
+   ],
+   "skirt_h_m": 0.45,
+   "skirted_up": false,
+   "drip_line_offset_m": -0.3,
+   "rope_lines": [],
+   "props": [],
+   "fruit_set_date": "2026-03-25",
+   "bagging_date": "2026-04-25",
+   "ribbon_colour": null,
+   "shooting_date": null,
+   "last_visit": null,
+   "flags": [],
+   "seed": 13
+  },
+  {
+   "tree_id": "R2-1",
+   "physical_tag": "G-1",
+   "block_id": "B2-guava",
+   "row_id": "R2",
+   "crop": "guava",
+   "cultivar": "Allahabad Safeda",
+   "form": "grafted",
+   "geo": {
+    "frame": "nandi_local_v1",
+    "x": 2.0,
+    "y": 7.5
+   },
+   "height_m": 1.6,
+   "canopy_r_m": 0.7,
+   "trunk_r_m": 0.045,
+   "trunk_h_m": 0.5,
+   "graft_union_h_m": 0.3,
+   "basin_r_m": 0.6,
+   "orbit_clear": false,
+   "orbit_standoff_m": 0.9,
+   "alley_sides": [
+    "-y",
+    "+y"
+   ],
+   "alley_clear_height_m": [
+    2.5,
+    2.5
+   ],
+   "skirt_h_m": 0.35,
+   "skirted_up": false,
+   "drip_line_offset_m": -0.3,
+   "rope_lines": [],
+   "props": [],
+   "fruit_set_date": "2026-08-20",
+   "bagging_date": null,
+   "ribbon_colour": null,
+   "shooting_date": null,
+   "last_visit": null,
+   "flags": [],
+   "seed": 20
+  },
+  {
+   "tree_id": "R2-2",
+   "physical_tag": "G-2",
+   "block_id": "B2-guava",
+   "row_id": "R2",
+   "crop": "guava",
+   "cultivar": "Allahabad Safeda",
+   "form": "grafted",
+   "geo": {
+    "frame": "nandi_local_v1",
+    "x": 3.5,
+    "y": 7.5
+   },
+   "height_m": 1.9,
+   "canopy_r_m": 0.7,
+   "trunk_r_m": 0.045,
+   "trunk_h_m": 0.5,
+   "graft_union_h_m": 0.3,
+   "basin_r_m": 0.6,
+   "orbit_clear": false,
+   "orbit_standoff_m": 0.9,
+   "alley_sides": [
+    "-y",
+    "+y"
+   ],
+   "alley_clear_height_m": [
+    2.5,
+    2.5
+   ],
+   "skirt_h_m": 0.35,
+   "skirted_up": false,
+   "drip_line_offset_m": -0.3,
+   "rope_lines": [],
+   "props": [],
+   "fruit_set_date": "2026-08-20",
+   "bagging_date": null,
+   "ribbon_colour": null,
+   "shooting_date": null,
+   "last_visit": null,
+   "flags": [],
+   "seed": 21
+  },
+  {
+   "tree_id": "R2-3",
+   "physical_tag": "G-3",
+   "block_id": "B2-guava",
+   "row_id": "R2",
+   "crop": "guava",
+   "cultivar": "Allahabad Safeda",
+   "form": "grafted",
+   "geo": {
+    "frame": "nandi_local_v1",
+    "x": 5.0,
+    "y": 7.5
+   },
+   "height_m": 2.2,
+   "canopy_r_m": 0.7,
+   "trunk_r_m": 0.045,
+   "trunk_h_m": 0.5,
+   "graft_union_h_m": 0.3,
+   "basin_r_m": 0.6,
+   "orbit_clear": false,
+   "orbit_standoff_m": 0.9,
+   "alley_sides": [
+    "-y",
+    "+y"
+   ],
+   "alley_clear_height_m": [
+    2.5,
+    2.5
+   ],
+   "skirt_h_m": 0.35,
+   "skirted_up": false,
+   "drip_line_offset_m": -0.3,
+   "rope_lines": [],
+   "props": [],
+   "fruit_set_date": "2026-08-20",
+   "bagging_date": null,
+   "ribbon_colour": null,
+   "shooting_date": null,
+   "last_visit": null,
+   "flags": [],
+   "seed": 22
+  },
+  {
+   "tree_id": "R2-4",
+   "physical_tag": "G-4",
+   "block_id": "B2-guava",
+   "row_id": "R2",
+   "crop": "guava",
+   "cultivar": "Allahabad Safeda",
+   "form": "grafted",
+   "geo": {
+    "frame": "nandi_local_v1",
+    "x": 6.5,
+    "y": 7.5
+   },
+   "height_m": 2.5,
+   "canopy_r_m": 0.7,
+   "trunk_r_m": 0.045,
+   "trunk_h_m": 0.5,
+   "graft_union_h_m": 0.3,
+   "basin_r_m": 0.6,
+   "orbit_clear": false,
+   "orbit_standoff_m": 0.9,
+   "alley_sides": [
+    "-y",
+    "+y"
+   ],
+   "alley_clear_height_m": [
+    2.5,
+    2.5
+   ],
+   "skirt_h_m": 0.35,
+   "skirted_up": false,
+   "drip_line_offset_m": -0.3,
+   "rope_lines": [],
+   "props": [],
+   "fruit_set_date": "2026-08-20",
+   "bagging_date": null,
+   "ribbon_colour": null,
+   "shooting_date": null,
+   "last_visit": null,
+   "flags": [],
+   "seed": 23
+  },
+  {
+   "tree_id": "R3-1",
+   "physical_tag": "P-1",
+   "block_id": "B3-papaya",
+   "row_id": "R3",
+   "crop": "papaya",
+   "cultivar": "Red Lady",
+   "form": "own_rooted",
+   "geo": {
+    "frame": "nandi_local_v1",
+    "x": 2.0,
+    "y": 11.0
+   },
+   "height_m": 1.6,
+   "canopy_r_m": 0.9,
+   "trunk_r_m": 0.07,
+   "trunk_h_m": 1.3,
+   "graft_union_h_m": null,
+   "basin_r_m": 0.6,
+   "orbit_clear": false,
+   "orbit_standoff_m": 0.9,
+   "alley_sides": [
+    "-y",
+    "+y"
+   ],
+   "alley_clear_height_m": [
+    2.5,
+    2.5
+   ],
+   "skirt_h_m": null,
+   "skirted_up": false,
+   "drip_line_offset_m": -0.3,
+   "rope_lines": [],
+   "props": [],
+   "fruit_set_date": "2026-07-01",
+   "bagging_date": null,
+   "ribbon_colour": null,
+   "shooting_date": null,
+   "last_visit": null,
+   "flags": [],
+   "seed": 30
+  },
+  {
+   "tree_id": "R3-2",
+   "physical_tag": "P-2",
+   "block_id": "B3-papaya",
+   "row_id": "R3",
+   "crop": "papaya",
+   "cultivar": "Red Lady",
+   "form": "own_rooted",
+   "geo": {
+    "frame": "nandi_local_v1",
+    "x": 3.8,
+    "y": 11.0
+   },
+   "height_m": 1.9,
+   "canopy_r_m": 0.9,
+   "trunk_r_m": 0.07,
+   "trunk_h_m": 1.6,
+   "graft_union_h_m": null,
+   "basin_r_m": 0.6,
+   "orbit_clear": false,
+   "orbit_standoff_m": 0.9,
+   "alley_sides": [
+    "-y",
+    "+y"
+   ],
+   "alley_clear_height_m": [
+    2.5,
+    2.5
+   ],
+   "skirt_h_m": null,
+   "skirted_up": false,
+   "drip_line_offset_m": -0.3,
+   "rope_lines": [],
+   "props": [],
+   "fruit_set_date": "2026-07-01",
+   "bagging_date": null,
+   "ribbon_colour": null,
+   "shooting_date": null,
+   "last_visit": null,
+   "flags": [],
+   "seed": 31
+  },
+  {
+   "tree_id": "R3-3",
+   "physical_tag": "P-3",
+   "block_id": "B3-papaya",
+   "row_id": "R3",
+   "crop": "papaya",
+   "cultivar": "Red Lady",
+   "form": "own_rooted",
+   "geo": {
+    "frame": "nandi_local_v1",
+    "x": 5.6,
+    "y": 11.0
+   },
+   "height_m": 2.2,
+   "canopy_r_m": 0.9,
+   "trunk_r_m": 0.07,
+   "trunk_h_m": 1.9,
+   "graft_union_h_m": null,
+   "basin_r_m": 0.6,
+   "orbit_clear": false,
+   "orbit_standoff_m": 0.9,
+   "alley_sides": [
+    "-y",
+    "+y"
+   ],
+   "alley_clear_height_m": [
+    2.5,
+    2.5
+   ],
+   "skirt_h_m": null,
+   "skirted_up": false,
+   "drip_line_offset_m": -0.3,
+   "rope_lines": [],
+   "props": [],
+   "fruit_set_date": "2026-07-01",
+   "bagging_date": null,
+   "ribbon_colour": null,
+   "shooting_date": null,
+   "last_visit": null,
+   "flags": [],
+   "seed": 32
+  },
+  {
+   "tree_id": "R3-4",
+   "physical_tag": "P-4",
+   "block_id": "B3-papaya",
+   "row_id": "R3",
+   "crop": "papaya",
+   "cultivar": "Red Lady",
+   "form": "own_rooted",
+   "geo": {
+    "frame": "nandi_local_v1",
+    "x": 7.4,
+    "y": 11.0
+   },
+   "height_m": 2.6,
+   "canopy_r_m": 0.9,
+   "trunk_r_m": 0.07,
+   "trunk_h_m": 2.3,
+   "graft_union_h_m": null,
+   "basin_r_m": 0.6,
+   "orbit_clear": false,
+   "orbit_standoff_m": 0.9,
+   "alley_sides": [
+    "-y",
+    "+y"
+   ],
+   "alley_clear_height_m": [
+    2.5,
+    2.5
+   ],
+   "skirt_h_m": null,
+   "skirted_up": false,
+   "drip_line_offset_m": -0.3,
+   "rope_lines": [],
+   "props": [],
+   "fruit_set_date": "2026-07-01",
+   "bagging_date": null,
+   "ribbon_colour": null,
+   "shooting_date": null,
+   "last_visit": null,
+   "flags": [],
+   "seed": 33
+  },
+  {
+   "tree_id": "R4-1",
+   "physical_tag": "B-1",
+   "block_id": "B4-banana",
+   "row_id": "R4",
+   "crop": "banana",
+   "cultivar": "Grand Naine",
+   "form": "sucker",
+   "geo": {
+    "frame": "nandi_local_v1",
+    "x": 2.0,
+    "y": 14.5
+   },
+   "height_m": 2.2,
+   "canopy_r_m": 1.4,
+   "trunk_r_m": 0.118,
+   "trunk_h_m": 2.2,
+   "graft_union_h_m": null,
+   "basin_r_m": 0.6,
+   "orbit_clear": false,
+   "orbit_standoff_m": 0.9,
+   "alley_sides": [
+    "-y",
+    "+y"
+   ],
+   "alley_clear_height_m": [
+    1.3,
+    1.3
+   ],
+   "skirt_h_m": null,
+   "skirted_up": false,
+   "drip_line_offset_m": -0.3,
+   "rope_lines": [
+    {
+     "id": "B1_B2",
+     "a": [
+      2.118,
+      14.5,
+      1.4
+     ],
+     "b": [
+      3.682,
+      14.5,
+      1.4
+     ],
+     "r_m": 0.006,
+     "to_tree": "R4-2"
+    }
+   ],
+   "props": [],
+   "fruit_set_date": null,
+   "bagging_date": null,
+   "ribbon_colour": "red",
+   "shooting_date": "2026-08-10",
+   "last_visit": null,
+   "flags": [],
+   "seed": 40
+  },
+  {
+   "tree_id": "R4-2",
+   "physical_tag": "B-2",
+   "block_id": "B4-banana",
+   "row_id": "R4",
+   "crop": "banana",
+   "cultivar": "Grand Naine",
+   "form": "sucker",
+   "geo": {
+    "frame": "nandi_local_v1",
+    "x": 3.8,
+    "y": 14.5
+   },
+   "height_m": 2.2,
+   "canopy_r_m": 1.4,
+   "trunk_r_m": 0.118,
+   "trunk_h_m": 2.2,
+   "graft_union_h_m": null,
+   "basin_r_m": 0.6,
+   "orbit_clear": false,
+   "orbit_standoff_m": 0.9,
+   "alley_sides": [
+    "-y",
+    "+y"
+   ],
+   "alley_clear_height_m": [
+    1.3,
+    1.3
+   ],
+   "skirt_h_m": null,
+   "skirted_up": false,
+   "drip_line_offset_m": -0.3,
+   "rope_lines": [],
+   "props": [],
+   "fruit_set_date": null,
+   "bagging_date": null,
+   "ribbon_colour": "blue",
+   "shooting_date": "2026-08-24",
+   "last_visit": null,
+   "flags": [],
+   "seed": 41
+  },
+  {
+   "tree_id": "R4-3",
+   "physical_tag": "B-3",
+   "block_id": "B4-banana",
+   "row_id": "R4",
+   "crop": "banana",
+   "cultivar": "Grand Naine",
+   "form": "sucker",
+   "geo": {
+    "frame": "nandi_local_v1",
+    "x": 5.6,
+    "y": 14.5
+   },
+   "height_m": 2.2,
+   "canopy_r_m": 1.4,
+   "trunk_r_m": 0.118,
+   "trunk_h_m": 2.2,
+   "graft_union_h_m": null,
+   "basin_r_m": 0.6,
+   "orbit_clear": false,
+   "orbit_standoff_m": 0.9,
+   "alley_sides": [
+    "-y",
+    "+y"
+   ],
+   "alley_clear_height_m": [
+    1.3,
+    1.3
+   ],
+   "skirt_h_m": null,
+   "skirted_up": false,
+   "drip_line_offset_m": -0.3,
+   "rope_lines": [],
+   "props": [
+    {
+     "id": "bamboo_B3",
+     "kind": "bamboo",
+     "a": [
+      6.05,
+      14.1,
+      0.0
+     ],
+     "b": [
+      5.8,
+      14.35,
+      1.45
+     ],
+     "r_m": 0.025,
+     "supports": "bunch"
+    }
+   ],
+   "fruit_set_date": null,
+   "bagging_date": null,
+   "ribbon_colour": "green",
+   "shooting_date": "2026-09-07",
+   "last_visit": null,
+   "flags": [],
+   "seed": 42
+  },
+  {
+   "tree_id": "R4-4",
+   "physical_tag": "B-4",
+   "block_id": "B4-banana",
+   "row_id": "R4",
+   "crop": "banana",
+   "cultivar": "Grand Naine",
+   "form": "sucker",
+   "geo": {
+    "frame": "nandi_local_v1",
+    "x": 7.4,
+    "y": 14.5
+   },
+   "height_m": 2.2,
+   "canopy_r_m": 1.4,
+   "trunk_r_m": 0.118,
+   "trunk_h_m": 2.2,
+   "graft_union_h_m": null,
+   "basin_r_m": 0.6,
+   "orbit_clear": false,
+   "orbit_standoff_m": 0.9,
+   "alley_sides": [
+    "-y",
+    "+y"
+   ],
+   "alley_clear_height_m": [
+    1.3,
+    1.3
+   ],
+   "skirt_h_m": null,
+   "skirted_up": false,
+   "drip_line_offset_m": -0.3,
+   "rope_lines": [],
+   "props": [],
+   "fruit_set_date": null,
+   "bagging_date": null,
+   "ribbon_colour": "yellow",
+   "shooting_date": "2026-09-21",
+   "last_visit": null,
+   "flags": [],
+   "seed": 43
+  }
+ ],
+ "terrain": {
+  "extent": {
+   "x": [
+    -7.0,
+    17.0
+   ],
+   "y": [
+    -7.0,
+    18.0
+   ]
+  },
+  "res_m": 0.05,
+  "friction": 0.8,
+  "noise": {
+   "amp_m": 0.01,
+   "cell_m": 0.5,
+   "gentle_amp_m": 0.003,
+   "zone_ramp_m": 0.5,
+   "flat_zones": [
+    {
+     "id": "home_pad",
+     "x": [
+      -6.5,
+      4.5
+     ],
+     "y": [
+      -3.5,
+      1.0
+     ]
+    },
+    {
+     "id": "ot1_orbit",
+     "x": [
+      2.5,
+      9.5
+     ],
+     "y": [
+      -6.8,
+      -0.5
+     ]
+    }
+   ],
+   "gentle_zones": [
+    {
+     "id": "R1_alley_s",
+     "x": [
+      -1.0,
+      10.5
+     ],
+     "y": [
+      -1.5,
+      1.4
+     ]
+    },
+    {
+     "id": "R1_alley_n",
+     "x": [
+      -1.0,
+      10.5
+     ],
+     "y": [
+      3.6,
+      6.4
+     ]
+    },
+    {
+     "x": [
+      1.0,
+      8.4
+     ],
+     "y": [
+      9.35,
+      9.95
+     ]
+    },
+    {
+     "x": [
+      1.0,
+      8.4
+     ],
+     "y": [
+      12.05,
+      12.65
+     ]
+    },
+    {
+     "x": [
+      1.0,
+      8.4
+     ],
+     "y": [
+      12.85,
+      13.45
+     ]
+    },
+    {
+     "x": [
+      1.0,
+      8.4
+     ],
+     "y": [
+      15.55,
+      16.15
+     ]
+    }
+   ]
+  },
+  "basins": {
+   "rim_h_m": 0.1,
+   "rim_crest_m": 0.15,
+   "edge_deg": 30.0,
+   "flooded": false
+  },
+  "bunds": [
+   {
+    "id": "bund_R2R3",
+    "from": [
+     -3.0,
+     10.25
+    ],
+    "to": [
+     0.6,
+     10.25
+    ],
+    "h_m": 0.1,
+    "crest_m": 0.3,
+    "edge_deg": 30.0
+   }
+  ],
+  "slopes": [
+   {
+    "id": "headland_5deg",
+    "deg": 5.0,
+    "core": {
+     "x": [
+      11.0,
+      13.0
+     ],
+     "y": [
+      3.0,
+      7.0
+     ]
+    },
+    "rise": "+x",
+    "walk_x": 11.5,
+    "note": "R1->R2 headland: stowed crossing"
+   },
+   {
+    "id": "patch_10deg",
+    "deg": 10.0,
+    "core": {
+     "x": [
+      10.0,
+      12.0
+     ],
+     "y": [
+      13.5,
+      15.5
+     ]
+    },
+    "rise": "+x",
+    "note": "R4 end: crown refusal demo"
+   }
+  ],
+  "patches": [
+   {
+    "id": "mud_1",
+    "kind": "mud",
+    "center": [
+     -3.0,
+     -2.0
+    ],
+    "half": [
+     0.8,
+     0.8
+    ],
+    "depth_m": 0.06,
+    "friction": 0.3
+   },
+   {
+    "id": "sink_1",
+    "kind": "sink",
+    "center": [
+     -5.0,
+     -2.0
+    ],
+    "half": [
+     0.7,
+     0.7
+    ],
+    "depth_m": 0.06,
+    "friction": 0.5,
+    "penetration_m": 0.04
+   }
+  ]
+ },
+ "fixtures": {
+  "laterals_auto": true,
+  "lateral_r_m": 0.008,
+  "lateral_overhang_m": 1.0,
+  "laterals": [
+   {
+    "id": "lateral_OT1_ring",
+    "ring": {
+     "tree_id": "OT-1",
+     "r_m": 0.8,
+     "n": 16
+    }
+   },
+   {
+    "id": "lateral_OT1_spur",
+    "kind": "spur",
+    "points": [
+     [
+      5.2,
+      -3.5
+     ],
+     [
+      3.0,
+      -3.5
+     ]
+    ],
+    "note": "crosses the OT-1 orbit (r1 1.9 m): crossings are counted, not avoided"
+   }
+  ],
+  "mulch": [
+   {
+    "id": "R3_s",
+    "x": [
+     1.0,
+     8.4
+    ],
+    "y": [
+     9.35,
+     9.95
+    ]
+   },
+   {
+    "id": "R3_n",
+    "x": [
+     1.0,
+     8.4
+    ],
+    "y": [
+     12.05,
+     12.65
+    ]
+   },
+   {
+    "id": "R4_s",
+    "x": [
+     1.0,
+     8.4
+    ],
+    "y": [
+     12.85,
+     13.45
+    ]
+   },
+   {
+    "id": "R4_n",
+    "x": [
+     1.0,
+     8.4
+    ],
+    "y": [
+     15.55,
+     16.15
+    ]
+   }
+  ]
+ },
+ "actors": [
+  {
+   "id": "worker_1",
+   "type": "worker",
+   "home": [
+    9.5,
+    -1.0,
+    180.0
+   ],
+   "label": "worker who walks into the crown-scaled warning field during the OT-1 orbit (OS 1.2 step 2)",
+   "start": {
+    "mode": "robot_within",
+    "xy": [
+     6.0,
+     -3.5
+    ],
+    "r": 2.4,
+    "after_s": 40.0
+   },
+   "script": {
+    "frame": "robot",
+    "waypoints": [
+     [
+      0.5,
+      -4.5
+     ],
+     [
+      0.5,
+      -2.6
+     ],
+     [
+      0.5,
+      -6.0
+     ]
+    ],
+    "holds_s": [
+     0.0,
+     6.0,
+     0.0
+    ],
+    "speed_mps": 1.0,
+    "on_end": "home"
+   }
+  },
+  {
+   "id": "dog_1",
+   "type": "dog",
+   "home": [
+    -1.0,
+    9.25,
+    0.0
+   ],
+   "label": "dog crossing the alley at G-2 (OS 1.2 step 6): protective stop",
+   "start": {
+    "mode": "robot_within",
+    "xy": [
+     3.5,
+     7.5
+    ],
+    "r": 2.2,
+    "after_s": 15.0
+   },
+   "script": {
+    "frame": "robot",
+    "waypoints": [
+     [
+      1.6,
+      3.0
+     ],
+     [
+      1.6,
+      -3.0
+     ]
+    ],
+    "speed_mps": 1.5,
+    "on_end": "park"
+   }
+  },
+  {
+   "id": "ladder_1",
+   "type": "ladder_picker",
+   "home": [
+    10.8,
+    2.5,
+    180.0
+   ],
+   "drop_every_s": 20.0,
+   "label": "picker on a ladder at M-4, feet 0.8 m, dropping fruit",
+   "start": {
+    "mode": "always"
+   },
+   "script": {}
+  },
+  {
+   "id": "pole_1",
+   "type": "pole_picker",
+   "home": [
+    7.6,
+    7.5,
+    180.0
+   ],
+   "label": "worker with a 3.5 m pole picker at G-4",
+   "start": {
+    "mode": "never"
+   },
+   "script": {}
+  },
+  {
+   "id": "child_1",
+   "type": "child",
+   "home": [
+    -4.5,
+    9.0,
+    0.0
+   ],
+   "label": "child standing on the west headland",
+   "start": {
+    "mode": "never"
+   },
+   "script": {}
+  },
+  {
+   "id": "crouch_1",
+   "type": "crouching",
+   "home": [
+    8.6,
+    11.0,
+    180.0
+   ],
+   "label": "crouching worker by P-4",
+   "start": {
+    "mode": "never"
+   },
+   "script": {}
+  },
+  {
+   "id": "lying_1",
+   "type": "lying",
+   "home": [
+    -2.0,
+    4.5,
+    0.0
+   ],
+   "parked": true,
+   "label": "person lying down: WP6 tests only (parked until commanded)",
+   "start": {
+    "mode": "cmd"
+   },
+   "script": {}
+  },
+  {
+   "id": "monkey_1",
+   "type": "monkey",
+   "home": [
+    7.6,
+    13.4,
+    90.0
+   ],
+   "label": "monkey roaming the banana block",
+   "start": {
+    "mode": "always"
+   },
+   "script": {
+    "waypoints": [
+     [
+      8.6,
+      13.4
+     ],
+     [
+      8.6,
+      15.6
+     ],
+     [
+      7.6,
+      15.6
+     ],
+     [
+      7.6,
+      13.4
+     ]
+    ],
+    "speed_mps": 0.4,
+    "loop": true
+   }
+  },
+  {
+   "id": "cattle_1",
+   "type": "cattle",
+   "home": [
+    15.5,
+    9.0,
+    90.0
+   ],
+   "label": "stray cattle on the east headland",
+   "start": {
+    "mode": "always"
+   },
+   "script": {
+    "waypoints": [
+     [
+      15.5,
+      12.0
+     ],
+     [
+      15.5,
+      9.0
+     ]
+    ],
+    "speed_mps": 0.3,
+    "loop": true
+   }
+  },
+  {
+   "id": "nilgai_1",
+   "type": "nilgai",
+   "home": [
+    16.0,
+    16.5,
+    200.0
+   ],
+   "parked": true,
+   "label": "nilgai (blue bull): parked until commanded (WP39 change request)",
+   "start": {
+    "mode": "cmd"
+   },
+   "script": {
+    "frame": "robot",
+    "waypoints": [
+     [
+      3.0,
+      4.0
+     ],
+     [
+      3.0,
+      -4.0
+     ]
+    ],
+    "speed_mps": 1.2,
+    "on_end": "park"
+   }
+  }
+ ],
+ "lighting": {
+  "default": "morning"
+ },
+ "events": [
+  {
+   "id": "gust_11",
+   "type": "wind",
+   "trigger": {
+    "mode": "cmd"
+   },
+   "script": {
+    "speed_mps": 3.0,
+    "dir_deg": 90.0,
+    "gusts": [
+     {
+      "t0": 1.0,
+      "peak_mps": 11.0,
+      "rise_s": 0.5,
+      "hold_s": 4.0,
+      "fall_s": 2.0,
+      "dir_deg": 90.0
+     }
+    ]
+   },
+   "note": "RECOVERY (a): 11 m/s gust while walking crown-mid (OS 1.2 step 10)"
+  },
+  {
+   "id": "light_dusk",
+   "type": "light",
+   "preset": "dusk",
+   "trigger": {
+    "mode": "cmd"
+   }
+  },
+  {
+   "id": "light_dawn",
+   "type": "light",
+   "preset": "dawn",
+   "trigger": {
+    "mode": "cmd"
+   },
+   "note": "LEAF SCAN dawn mode (OS 4.5)"
+  },
+  {
+   "id": "light_noon",
+   "type": "light",
+   "preset": "noon",
+   "trigger": {
+    "mode": "cmd"
+   }
+  },
+  {
+   "id": "light_morning",
+   "type": "light",
+   "preset": "morning",
+   "trigger": {
+    "mode": "cmd"
+   }
+  },
+  {
+   "id": "light_overcast",
+   "type": "light",
+   "preset": "overcast",
+   "trigger": {
+    "mode": "cmd"
+   }
+  },
+  {
+   "id": "fog_dust",
+   "type": "fog",
+   "density": 0.5,
+   "trigger": {
+    "mode": "cmd"
+   },
+   "note": "dust / fog stub"
+  },
+  {
+   "id": "fog_clear",
+   "type": "fog",
+   "density": 0.0,
+   "trigger": {
+    "mode": "cmd"
+   }
+  },
+  {
+   "id": "rain_shower",
+   "type": "rain",
+   "dur_s": 600.0,
+   "mm_h": 8.0,
+   "trigger": {
+    "mode": "cmd"
+   }
+  }
+ ]
+}

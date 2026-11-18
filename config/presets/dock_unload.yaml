@@ -1,0 +1,43 @@
+# DOCK / UNLOAD (MISSION-PRESETS 9): park alongside the crate, kinematic transfer one by one (ASSISTED), job sheets,
+# dock (< 3 cm / 5 deg), time-compressed charge, hub sync stub. Times: WP13 measured 100.8 s sim for 3 items
+# incl. crate park, dock and charge (the WP13 contract notes); WP3 unload 3.69 s sim per item.
+schema: nandi.preset/1
+id: dock_unload
+mode: dock_unload
+version: 1
+kind: dock
+title: "DOCK / UNLOAD"
+season: dock_unload
+crops: [mango, guava, papaya, banana]
+targets: [none]
+crown: none
+weather: exempt
+slope_limit_deg: 5.0
+float_ok: false
+ready: {relax: [energy, season, weather, disk]}
+params:
+  crate_id: {default: crate_1}
+  dock_id: {default: dock_1}
+  sync: {default: true}
+  items: {default: 7, min: 0, max: 16}                     # items in the tray / cradle (from the transfer state)
+  per_item_s: {default: 4.0, min: 2.0, max: 20.0}          # WP3 measured 3.69 s / item
+  dock_charge_s: {default: 88.0, min: 20.0, max: 300.0}    # WP13 measured: 100.8 s with 3 items -> ~89 s fixed
+preconditions: [ready_common, crown_stowed, dwell_slope]
+steps: ["park alongside the crate", "kinematic transfer one by one (ASSISTED), per-tree attribution",
+        "generate the job sheets for the rows visited", "dock (< 3 cm / 5 deg)", "time-compressed charge",
+        "hub sync stub: close the manifest, mark L2/L3 queued"]
+interlocks: [common, arm_moves_gait_stopped]
+outputs: [crate_count, kg_per_tree, job_sheets, dock_state, manifest_closed]
+kpis: [O-20, O-23]
+retry: {dock_misaligned: 2, then: assist}
+gates:
+  - {kind: walk, ext_m: 0.0, v_mps: 0.18}
+  - {kind: dwell, ext_m: 0.0, dwell_s: 60.0, slope_deg: 3.0}   # crate park: unload > 20 s is a long dwell
+estimate:
+  fixed_s: $dock_charge_s
+  per_item_s: $per_item_s
+  items: $items
+  walk_m: route_m
+  v_mps: 0.18
+console: {tile: "DOCK/UNLOAD", icon: dock, hi: "उतारो और डॉक", en: "Dock / unload", order: 40, group: dock,
+          show: [sync], advanced: [crate_id, dock_id]}

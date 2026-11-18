@@ -1,0 +1,28 @@
+# target_loop template (MISSION-PRESETS 0.4 as a workflow; WORKFLOWS-SPEC A.2; WP34).
+# Per target: the body is tried `rounds` times (1 + retries), then assist_request (Take over / Skip / Halt);
+# Skip, or no reply within the assist timeout, skips the target with `reason`. More than skip_ratio_halt of the
+# targets skipped -> the loop stops and requests RTH with reason rth_skip_ratio.
+schema: nandi.workflow/1
+id: target_loop
+version: 1
+kind: subtree
+primitives_api: 1
+labels: {en: targets, hi: लक्ष्य}
+slots: [body]
+params:
+  set: {default: targets}
+  rounds: {default: 3, min: 1, max: 4}
+  reason: {default: out_of_reach_marked}
+  skip_ratio_halt: {default: 0.5, min: 0.1, max: 1.0}
+root:
+  foreach:
+    set: $set
+    skip_ratio_halt: $skip_ratio_halt
+    labels: {en: target, hi: लक्ष्य}
+    body:
+      selector:
+        memory: true
+        children:
+        - recover: {body: {slot: body}, max_rounds: $rounds, then: fail}
+        - action: {do: assist_request, args: {reason: $reason}, timeout_s: 300, labels: {en: assist, hi: सहायता}}
+        - action: {do: skip, args: {reason: $reason}}

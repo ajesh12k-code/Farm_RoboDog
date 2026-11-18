@@ -1,0 +1,35 @@
+# Atharv Nandi run evidence + kis/v1 bridge (sim/telemetry_bridge.py, sim/run_recorder.py).
+# Everything here is simulated: the tenant must start with "sim-" (the mapper refuses any other),
+# and the site origin is FICTITIOUS (0 N, 0 E, open ocean) - never a real farm's coordinates.
+
+identity:
+  tenant: sim-nandi            # ^sim- enforced by controllers/kis_mapper.py
+  site: sim-field-01
+  device: nandi-sim-01         # also the device_id in meta.json, attempts and KPIs
+
+site_origin:                   # local ENU (x = east, y = north, z = up) -> lat/lon
+  lat: 0.0
+  lon: 0.0
+  alt: 0.0
+
+rates_hz:
+  pose: 2.0                    # tele/pose (acceptance: >= 1 Hz)
+  mission: 1.0                 # tele/mission (also sent on every arm mode/phase change)
+
+state:
+  min_interval_s: 1.0          # retained state: on change, but change-driven sends at least this far apart
+
+run:
+  runs_dir: runs               # relative to the repository root; runs/.gitignore keeps it out of git
+  summary_period_s: 5.0        # joint_effort_summary.json + manifest.json refresh while running
+
+sinks:
+  file:
+    enabled: true              # runs/<run_id>/kis_v1.jsonl
+  mqtt:
+    enabled: false             # off by default; paho-mqtt is imported only when this is true
+    # No broker hostnames or credentials in the repo: they come from the environment.
+    url_env: NANDI_MQTT_URL            # e.g. set in your shell, never committed
+    username_env: NANDI_MQTT_USERNAME
+    password_env: NANDI_MQTT_PASSWORD
+    keepalive_s: 60

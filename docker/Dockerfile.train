@@ -1,0 +1,19 @@
+# Atharv Nandi training / RL-runtime image: the sim image plus CPU PyTorch, Stable-Baselines3 and Gymnasium.
+# Used by docker/train.sh (headless PPO training) and docker/run_rl.sh (live sim with the RL policy).
+ARG BASE_IMAGE=atharv-nandi-sim
+FROM ${BASE_IMAGE}
+
+# CPU-only torch from the PyTorch index (the default PyPI wheel on x86_64 pulls in CUDA, several GB).
+RUN pip3 install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "torch>=2.1,<2.6"
+
+# numpy is re-pinned in the same resolve so SB3/gymnasium/pandas cannot drag in numpy 2,
+# which would break ROS Humble's apt-built Python bindings in the inherited sim stack.
+RUN pip3 install --no-cache-dir \
+        "numpy>=1.24,<2" \
+        "gymnasium>=0.29.1,<1.1" \
+        "stable-baselines3>=2.3,<2.5"
+
+# Torch/matplotlib write caches under $HOME; train.sh runs as the host user with HOME=/tmp.
+ENV MPLBACKEND=Agg
+
+# CMD (start.sh -> noVNC + full sim stack) is inherited from the base image.

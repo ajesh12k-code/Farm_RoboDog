@@ -1,0 +1,32 @@
+# WORK ASSIST: FOLLOW-ME (MISSION-PRESETS 7): follows a tagged adult operator (UWB / BLE tag, no vision identity).
+schema: nandi.preset/1
+id: work_follow
+mode: follow_me
+version: 1
+kind: assist
+title: "WORK: follow me (tag)"
+season: work
+crops: [mango, guava, papaya, banana]
+targets: [none]
+crown: none
+weather: non_contact
+slope_limit_deg: 5.0
+params:
+  follow_m: {default: 2.0, min: 1.5, max: 3.0}
+  v_mps: {default: 0.18, min: 0.05, max: 0.18}             # ~ 1/5 of a 1 m/s walking pace (stated, not hidden)
+  tag_lost_s: {default: 2.0, min: 0.5, max: 2.0}
+  duration_s: {default: 300.0, min: 10.0, max: 3600.0}
+preconditions: [ready_common, tag_paired, slope_walk]
+steps: ["Pair the adult operator's tag", "Follow at 1.5-3 m; stop on tag lost > 2 s or a person in the protective field"]
+interlocks: [common, crown_stowed, tag_lost_stop]
+outputs: [aggregate_stats]
+kpis: [follow_lag, false_stops_per_h, protective_violations_0]
+retry: {tag_lost: stop}
+gates:
+  - {kind: walk, ext_m: 0.0, v_mps: $v_mps}
+estimate:
+  fixed_s: $duration_s
+  walk_m: "0.5 * duration_s * v_mps"
+  walk_s: 0
+console: {tile: "WORK", icon: follow, hi: "मेरे पीछे", en: "Work: follow me", order: 22, group: work, show: [follow_m],
+          advanced: [v_mps]}

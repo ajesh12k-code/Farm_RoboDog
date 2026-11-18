@@ -1,0 +1,29 @@
+# Coverage gate (WP0, WPCOV; MVP-SPEC 6): >= 85 % line and >= 75 % branch on atharv_nandi/core/,
+# new modules >= 90 % line (tools/coverage_gate.py --new <paths>; the caller lists the added files). Measured in the
+# capped runner (atharv-nandi-sim image, pytest-cov 6.3.0) with:
+#   pytest -p pytest_cov --cov --cov-config=.coveragerc --cov-report=json:cov.json
+#   python3 tools/coverage_gate.py cov.json [--new ...]  # line AND branch gate on atharv_nandi/core/, per-module table
+# fail_under below is coverage.py's one combined (line + branch) total over every source; the spec gates are
+# tools/coverage_gate.py's. Partial runs (the 180 s capped runner): COVERAGE_FILE=.coverage.<n> per run, then
+# `coverage combine` (relative_files keeps container / host paths combinable) and `coverage json`. See docs/test-plan.md 5.1.
+[run]
+branch = True
+relative_files = True
+source =
+    atharv_nandi/core
+    atharv_nandi/sim/world
+    atharv_nandi/sim/hooks
+omit =
+    */__pycache__/*
+    tests/*
+
+[report]
+fail_under = 85
+show_missing = True
+skip_covered = False
+precision = 1
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    \.\.\.$

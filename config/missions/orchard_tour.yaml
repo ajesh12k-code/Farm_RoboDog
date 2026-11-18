@@ -1,0 +1,247 @@
+# Orchard tour (ORCHARD-MVP-SPEC 1.2 steps 0-12, MISSION-PRESETS 10), world orchard_demo, season demo_all_fruiting.
+# Each step runs one preset (Ready check + estimate from config/presets/) or a scripted part (t_s). ``motion`` is the
+# scripted motion profile of the step: every segment is checked against the WP6 gate table, the speed caps and the
+# slope rules by tests/test_tour_gates.py (OS 0 rule 14): walk {path, ext_m, v_mps}, raise {at, ext_m, to_m},
+# dwell {at | station, ext_m, dwell_s}; ``slope_deg`` is the scripted local slope and may not understate the
+# orchard_demo terrain (six-foot plane fit along the path) by more than 0.5 deg. ``transit: true`` walks are timed
+# on top of the preset estimate. ``event`` segments are scripted conditions the gates MUST refuse with
+# ``expect_refused`` (the recovery part). ``station`` names a WP0c frozen station (config/fields/orchard_candidates.json)
+# that the WP8 executor uses for that target. Positions are orchard_demo metres (fictitious frame, home at 0, 0).
+schema: nandi.mission/1
+id: orchard_tour
+classification: Public
+world: orchard_demo
+season: demo_all_fruiting
+budget_s: 978            # OS 1.2 sim-time budget (computed)
+budget_walk_s: 232.4     # its walking rows: to OT-1 ~6 m + align (38), to R2 8 m, R3 6 m, R4 6 m, home 15 m at 0.18 m/s
+gate_s: 1080             # <= 18 min sim
+ctx:                      # Ready-check context of the tour (WP7 stubs): November morning, dry, calm
+  season_profile: demo_all_fruiting
+  month: 11
+  frames_age_h: 0.1
+  marks_n: 0
+known_issues:
+  - id: CR-WP27-01
+    to: [WP0c, WP8, WP4]
+    text: >-
+      The WP0c frozen stations the WP8 executor uses for these targets put one side of the six-foot stance on the
+      0.10 m trunk-basin rim, or inside the basin so the approach steps over the rim: the foot-plane tilt is 4.1-11.7
+      deg at the station or on the approach (orchard_demo terrain, six-foot plane fit), above
+      the 5 deg short-dwell and 3 deg long-dwell limits (WP6 gate_dwell). Either the stations move off the rim
+      footprint (trunk distance >= basin keep-out + 0.36 m), the basin rim model changes, or WP6 gates the settled
+      body tilt measured at the station instead of the terrain plane. Tracked by a strict xfail in
+      tests/test_tour_gates.py so a fix is noticed.
+steps:
+  - id: s00_ready
+    os_step: "0"
+    title: "Open the page: Ready check green"
+    t_s: 5
+    budget_s: 5
+
+  - id: s01_scan_r1
+    os_step: "1"
+    title: "SCAN R1 (4 mango), crown mid, 0.15 m/s, north alley (R1 on the right)"
+    preset: scan
+    targets: {row_ids: [R1]}
+    params: {sides: R, crown_band: mid, v_mps: 0.15}
+    budget_s: 85
+    motion:
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 1.0, path: [[0.0, 0.0], [-1.0, 0.5], [-1.0, 5.0], [0.5, 5.0]]}
+      - {kind: raise, ext_m: 0.0, to_m: 0.6, at: [0.5, 5.0], slope_deg: 1.0}
+      - {kind: walk, ext_m: 0.6, v_mps: 0.15, slope_deg: 1.0, path: [[0.5, 5.0], [10.3, 5.0]]}
+      - {kind: dwell, ext_m: 0.6, dwell_s: 3.0, at: [2.0, 5.0], slope_deg: 1.0}
+      - {kind: dwell, ext_m: 0.6, dwell_s: 3.0, at: [4.5, 5.0], slope_deg: 1.0}
+      - {kind: dwell, ext_m: 0.6, dwell_s: 3.0, at: [7.0, 5.0], slope_deg: 1.0}
+      - {kind: dwell, ext_m: 0.6, dwell_s: 3.0, at: [9.5, 5.0], slope_deg: 1.0}
+      - {kind: raise, ext_m: 0.6, to_m: 0.0, at: [10.3, 5.0], slope_deg: 1.0}      # stow before the strip
+
+  - id: s01b_headland
+    os_step: "1b"
+    title: "Leave R1 across the 5 deg headland strip, crown stowed (chip crown_gate: slope 5 deg)"
+    t_s: 0
+    budget_s: 0
+    motion:
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 5.0, path: [[10.3, 5.0], [11.5, 5.0], [11.5, 0.5]]}
+      - {kind: event, expect_refused: slope, ext_m: 0.6, v_mps: 0.15, slope_deg: 5.0, walking: true}  # crown-up here refused
+
+  - id: s02_tree360
+    os_step: "2"
+    title: "TREE 360 on OT-1: r1 1.9 m, 8 stations, CCW; arcs at mid, mid -> high -> mid standing at each station"
+    # snake_mid, not the OS 1.2 snake: the registry alley_clear_height_m of OT-1 is 2.5 m, below the high-band head
+    # + margin (2.86 m), so arcs may not be walked at high (MP 0.2; CR-WP27-03: orbit ~190 s > O-06 165 s)
+    preset: tree360
+    targets: {tree_ids: [OT-1]}
+    params: {arc_mode: full, crown_walk: snake_mid}
+    budget_s: 188           # 150 orbit + 38 walk to OT-1 and entry align
+    motion:
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 1.0, path: [[11.5, 0.5], [11.0, -1.0], [7.9, -3.5]]}
+      - {kind: raise, ext_m: 0.0, to_m: 0.6, at: [7.9, -3.5], slope_deg: 1.0}
+      - {kind: raise, ext_m: 0.6, to_m: 1.6, at: [7.9, -3.5], slope_deg: 1.0}
+      - {kind: walk, ext_m: 0.6, v_mps: 0.15, slope_deg: 1.0, path: [[7.9, -3.5], [7.344, -2.157], [6.0, -1.6], [4.656, -2.157], [4.1, -3.5], [4.656, -4.843], [6.0, -5.4], [7.344, -4.843], [7.9, -3.5]]}
+      - {kind: dwell, ext_m: 1.6, dwell_s: 60.0, at: [7.9, -3.5], slope_deg: 1.0}
+      - {kind: dwell, ext_m: 1.6, dwell_s: 60.0, at: [6.0, -1.6], slope_deg: 1.0}
+      - {kind: dwell, ext_m: 1.6, dwell_s: 60.0, at: [4.1, -3.5], slope_deg: 1.0}
+      - {kind: dwell, ext_m: 1.6, dwell_s: 60.0, at: [6.0, -5.4], slope_deg: 1.0}
+
+  - id: s03_leaf_scan
+    os_step: "3"
+    title: "LEAF SCAN OT-1: 6 leaves + 1 high (crown view), trunk band from the ring low frame"
+    preset: leaf_scan
+    targets: {tree_ids: [OT-1]}
+    params: {n_leaves: 6, n_high: 1}
+    budget_s: 90
+    motion:
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 1.0, path: [[7.9, -3.5], [7.344, -4.843], [6.0, -5.4], [6.0, -5.15]]}
+      - {kind: dwell, ext_m: 0.0, dwell_s: 90.0, at: [6.0, -5.15], slope_deg: 1.0}
+
+  - id: s04_fruit_scout
+    os_step: "4"
+    title: "FRUIT SCOUT OT-1 (reuse the TREE 360 frames)"
+    preset: fruit_scout
+    targets: {tree_ids: [OT-1]}
+    params: {source: reuse_tree360}
+    budget_s: 10
+    motion:
+      - {kind: dwell, ext_m: 0.0, dwell_s: 10.0, at: [6.0, -5.15], slope_deg: 1.0}
+
+  - id: s05_harvest_mango
+    os_step: "5"
+    title: "HARVEST OT-1 mango: CLIPPER, one round, 3 in-band mature fruit, pedicel 20 mm"
+    preset: harvest_mango
+    targets: {tree_ids: [OT-1]}
+    params: {expected_n: 3, pedicel_leave_cm: 2.0}
+    budget_s: 66
+    motion:
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 3.0, path: [[6.0, -5.15], [5.048, -4.264]], known_issue: CR-WP27-01}
+      - {kind: dwell, ext_m: 0.0, dwell_s: 15.0, station: "OT-1:mango_pedicel_cut:1", slope_deg: 3.0, known_issue: CR-WP27-01}
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 3.0, path: [[5.048, -4.264], [5.417, -4.64]], known_issue: CR-WP27-01}
+      - {kind: dwell, ext_m: 0.0, dwell_s: 15.0, station: "OT-1:mango_pedicel_cut:2", slope_deg: 3.0, known_issue: CR-WP27-01}
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 3.0, path: [[5.417, -4.64], [6.111, -4.836]], known_issue: CR-WP27-01}
+      - {kind: dwell, ext_m: 0.0, dwell_s: 15.0, station: "OT-1:mango_pedicel_cut:3", slope_deg: 3.0, known_issue: CR-WP27-01}
+
+  - id: s06_harvest_guava
+    os_step: "6"
+    title: "Walk to R2 (west round R1-1); HARVEST G-2 guava clip x2 (blade clean on crop change); dog stop"
+    preset: harvest_guava
+    targets: {tree_ids: [G-2]}
+    params: {method: clip, expected_n: 2}
+    budget_s: 89
+    motion:
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 3.0, path: [[6.111, -4.836], [6.0, -5.4]], known_issue: CR-WP27-01}
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 1.0, path: [[6.0, -5.4], [3.0, -5.0], [0.0, -1.0], [0.0, 5.0], [3.013, 5.0], [3.013, 6.2]]}
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 3.0, path: [[3.013, 6.2], [3.013, 6.73]], known_issue: CR-WP27-01}
+      - {kind: dwell, ext_m: 0.0, dwell_s: 15.0, station: "R2-2:guava_clip:1", slope_deg: 3.0, known_issue: CR-WP27-01}
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 3.0, path: [[3.013, 6.73], [3.203, 6.531]], known_issue: CR-WP27-01}
+      - {kind: dwell, ext_m: 0.0, dwell_s: 15.0, station: "R2-2:guava_clip:2", slope_deg: 3.0, known_issue: CR-WP27-01}
+
+  - id: s07_prune_guava
+    os_step: "7"
+    title: "PRUNE G-2: rootstock sprout + skirt twig (<= 12 mm); water shoot and 20 mm branch MARKed"
+    preset: prune
+    targets: {tree_ids: [G-2]}
+    params: {jobs: [rootstock_sprout, skirt_lift], expected_n: 2}
+    budget_s: 46
+    motion:
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 3.0, path: [[3.203, 6.531], [3.182, 6.931]], known_issue: CR-WP27-01}
+      - {kind: dwell, ext_m: 0.0, dwell_s: 18.0, station: "R2-2:prune_rootstock_sprout:1", slope_deg: 3.0}
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 3.0, path: [[3.182, 6.931], [3.282, 6.62]], known_issue: CR-WP27-01}
+      - {kind: dwell, ext_m: 0.0, dwell_s: 18.0, station: "R2-2:prune_skirt_shoot:1", slope_deg: 3.0, known_issue: CR-WP27-01}
+
+  - id: s08_harvest_guava_twist
+    os_step: "8"
+    title: "HARVEST G-3 guava TWIST x1"
+    preset: harvest_guava
+    targets: {tree_ids: [G-3]}
+    params: {method: twist, expected_n: 1}
+    budget_s: 31
+    motion:
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 3.0, path: [[3.282, 6.62], [3.282, 6.2]], known_issue: CR-WP27-01}
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 1.0, path: [[3.282, 6.2], [4.491, 6.2]]}
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 3.0, path: [[4.491, 6.2], [4.491, 6.759]], known_issue: CR-WP27-01}
+      - {kind: dwell, ext_m: 0.0, dwell_s: 22.0, station: "R2-3:guava_cradle:1", slope_deg: 3.0, known_issue: CR-WP27-01}
+
+  - id: s08b_harvest_papaya
+    os_step: "8"
+    title: "R3: HARVEST P-1 papaya TWIST (one per trip, jaw_clearance; second ripe one MARKed no_clearance)"
+    preset: harvest_papaya
+    targets: {tree_ids: [P-1]}
+    params: {expected_n: 1}
+    budget_s: 63
+    motion:
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 3.0, path: [[4.491, 6.759], [4.491, 6.2]], known_issue: CR-WP27-01}
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 1.0, path: [[4.491, 6.2], [4.491, 5.0], [-1.0, 5.0], [-1.0, 9.25], [1.524, 9.25]]}
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 3.0, path: [[1.524, 9.25], [1.524, 10.558]], known_issue: CR-WP27-01}
+      - {kind: dwell, ext_m: 0.0, dwell_s: 22.0, station: "R3-1:papaya_cradle:3", slope_deg: 3.0}
+
+  - id: s09_prune_banana
+    os_step: "9"
+    title: "R4: PRUNE banana_tidy on B-2 + MARK sanitation deleaf / bunch / 2 suckers (east round the R3 row: the 0.10 m R2/R3 bund is not walkable at <= 5 deg)"
+    preset: prune_banana
+    targets: {tree_ids: [B-2]}
+    params: {expected_n: 1, marks_n: 4}
+    budget_s: 79
+    motion:
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 3.0, path: [[1.524, 10.558], [1.524, 9.25]], known_issue: CR-WP27-01}
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 1.0, path: [[1.524, 9.25], [9.3, 9.25], [9.3, 12.75], [3.654, 12.75]]}
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 3.0, path: [[3.654, 12.75], [3.654, 13.538]], known_issue: CR-WP27-01}
+      - {kind: dwell, ext_m: 0.0, dwell_s: 20.0, station: "R4-2:banana_tidy:1", slope_deg: 3.0, known_issue: CR-WP27-01}
+
+  - id: s10b_patch_refusal
+    os_step: "10b"
+    title: "RECOVERY (b): the 10 deg patch at the R4 end: crown and walking refused with the reason"
+    preset: scan
+    targets: {row_ids: [R4]}
+    ctx: {cross_slope_deg: 10.0}
+    expect: {level: no_go, reason: slope}
+    t_s: 10
+    budget_s: 10
+    motion:
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 3.0, path: [[3.654, 13.538], [3.654, 12.75]], known_issue: CR-WP27-01}
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 1.0, path: [[3.654, 12.75], [9.3, 12.75]]}
+      - {kind: event, expect_refused: slope, at: [11.0, 14.5], ext_m: 0.0, raise_to: 0.6, walking: false, slope_deg: 10.0}
+      - {kind: event, expect_refused: slope, at: [11.0, 14.5], ext_m: 0.0, v_mps: 0.18, walking: true, slope_deg: 10.0}
+
+  - id: s10a_gust
+    os_step: "10a"
+    title: "RECOVERY (a): walk home (east headland, stowed over the 5 deg strip); on the home pad raise to mid, walk crown mid; 11 m/s gust -> 6-foot stance <= 0.5 s, crown retracts"
+    t_s: 11
+    budget_s: 11
+    motion:
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 5.0, path: [[9.3, 12.75], [9.3, 9.25], [11.2, 9.25], [11.2, 0.5], [11.0, -1.0], [1.0, -1.0]]}
+      - {kind: raise, ext_m: 0.0, to_m: 0.6, at: [1.0, -1.0], slope_deg: 1.0}
+      - {kind: walk, ext_m: 0.6, v_mps: 0.15, slope_deg: 1.0, path: [[1.0, -1.0], [-0.5, -1.0]]}
+      - {kind: event, event: gust_11, expect_refused: wind, ext_m: 0.6, v_mps: 0.15, wind_mps: 11.0, walking: true, slope_deg: 1.0}
+      - {kind: event, event: gust_11, expect_refused: wind, ext_m: 0.0, raise_to: 0.6, wind_mps: 11.0, walking: false, slope_deg: 1.0}
+
+  - id: s10e_estop
+    os_step: "10e"
+    title: "RECOVERY (e): handheld E-STOP; checklist with local + operator confirmation (scripted 5 s each), crown retract, stand up"
+    preset: estop_recovery
+    ctx: {estop: true, estop_confirmed: [true, true], ext_m: 0.0}
+    params: {confirm_s: 5.0}
+    budget_s: 29
+    motion:
+      - {kind: dwell, ext_m: 0.0, dwell_s: 20.0, at: [-0.5, -1.0], slope_deg: 1.0}
+
+  - id: s11_dock_unload
+    os_step: "11"
+    title: "DOCK/UNLOAD: park by the crate, 7 items one by one (ASSISTED), dock, charge, hub sync stub, Hindi job sheets"
+    preset: dock_unload
+    params: {items: 7}
+    budget_s: 126
+    motion:
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 1.0, path: [[-0.5, -1.0], [0.5, -0.85]]}
+      - {kind: dwell, ext_m: 0.0, dwell_s: 30.0, at: [0.5, -0.85], slope_deg: 1.0}
+      - {kind: walk, ext_m: 0.0, v_mps: 0.1, slope_deg: 1.0, path: [[0.5, -0.85], [0.0, 0.0]]}
+
+  - id: s11b_allowance
+    os_step: "2/6"
+    title: "Worker pause (step 2), dog stop (step 6), 1 radius re-entry allowance"
+    t_s: 45
+    budget_s: 45
+
+  - id: s12_report
+    os_step: "12"
+    title: "Report: run card (tools/nandi_kpi.py, WP9)"
+    t_s: 5
+    budget_s: 5

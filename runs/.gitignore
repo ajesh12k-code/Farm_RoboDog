@@ -1,0 +1,3 @@
+# Run evidence (runs/<run_id>/...) is local output, never committed.
+*
+!.gitignore

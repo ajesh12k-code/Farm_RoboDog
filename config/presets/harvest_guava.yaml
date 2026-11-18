@@ -1,0 +1,49 @@
+# HARVEST / PICK guava: CLIP (T2) default, TWIST (T4) option (MISSION-PRESETS 5).
+schema: nandi.preset/1
+id: harvest_guava
+mode: harvest_tree
+version: 1
+kind: contact
+title: "HARVEST guava (clip / twist)"
+season: harvest_guava
+crops: [guava]
+targets: [tree_ids]
+crown: none
+weather: contact
+slope_limit_deg: 3.0
+method: clip
+tool: {by: method, values: {clip: T2, twist: T4}}
+params:
+  method: {default: clip, enum: [clip, twist]}
+  max_items: {default: 8, min: 1, max: 8}
+  expected_n: {default: 2, min: 0, max: 8}
+  pedicel_leave_cm: {default: 1.0, min: 0.5, max: 2.0}
+  tau_detach_nm: {default: 0.15, min: 0.05, max: 1.0}      # twist: above baseline + >= 30 deg roll (assumption)
+  clip_s: {default: 20.0, min: 5.0, max: 60.0}             # assumption, as mango (OS 1.2 20 s per clip)
+  twist_s: {default: 22.0, min: 5.0, max: 60.0}            # assumption, <= 25 s twist cycle (MP 5 KPI)
+  tool_change_s: {default: 9.0, min: 0.0, max: 30.0}
+  blade_clean_s: {default: 5.0, min: 0.0, max: 30.0}       # on crop change
+  fruit_kg: {default: 0.2, min: 0.05, max: 1.0}
+preconditions: [ready_common, tool_in_rack, payload_room, no_wet_foliage, crop_profile, scout_fresh_or_inline,
+                dwell_slope, fruit_not_bagged, crop_in_mvp]
+steps:
+  - "Tool change (CLIPPER or TWIST); blade clean on crop change"
+  - "Clip: the short stalk with leaves, one per cell. Twist: cradle, roll until the stem-axis release rule fires, place"
+  - "Out-of-band fruit -> MARK"
+interlocks: [blade_jaw_interlock, work_field_person, stability, no_tool_change_holding, payload_3kg, base_drift_2cm]
+outputs: [harvest_records, marks, tree_record_harvest]
+kpis: [O-10, O-11, O-12, O-15, O-16, cycle_clip_20s, cycle_twist_25s]
+retry: {per_target: 1, cut_not_fired: realign_10deg, twist_failed: mark}
+gates:
+  - {kind: dwell, ext_m: 0.0, dwell_s: $twist_s}
+  - {kind: dwell, ext_m: 0.0, dwell_s: 60.0}
+estimate:
+  fixed_s: "tool_change_s + blade_clean_s"
+  per_item_s:
+    by: method
+    values: {clip: $clip_s, twist: $twist_s}
+  items: $expected_n
+  disk_mb: 1.0
+payload: {per_item_kg: $fruit_kg, cells: 8}
+console: {tile: "HARVEST", icon: harvest, hi: "तुड़ाई अमरूद", en: "Harvest guava", order: 7, group: tree_card,
+          show: [method, max_items], advanced: [pedicel_leave_cm, tau_detach_nm]}

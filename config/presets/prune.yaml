@@ -1,0 +1,42 @@
+# CLIP / PRUNE mango and guava (MISSION-PRESETS 6): PRUNER (T5), in-band cuts <= 12 mm, everything else MARKed.
+schema: nandi.preset/1
+id: prune
+mode: prune_tree
+version: 1
+kind: contact
+title: "PRUNE (rootstock sprout, skirt lift, dead twig, malformed panicle)"
+season: "prune_{crop}"
+crops: [mango, guava]
+targets: [tree_ids]
+crown: none
+weather: contact
+slope_limit_deg: 3.0
+method: prune
+tool: T5
+params:
+  jobs: {default: [rootstock_sprout, skirt_lift], items: [rootstock_sprout, skirt_lift, dead_twig, malformed_panicle,
+                                                           water_shoot, tip_back_20cm]}
+  max_stem_mm: {default: 12.0, min: 1.0, max: 12.0}        # PRUNER capacity (assumption)
+  paste_required_mm: {default: 12.0, min: 5.0, max: 30.0}
+  expected_n: {default: 2, min: 0, max: 20}
+  per_item_s: {default: 18.0, min: 5.0, max: 60.0}         # assumption (OS 1.2 budget 2 prunes in 40 s)
+  tool_change_s: {default: 9.0, min: 0.0, max: 30.0}
+preconditions: [ready_common, tool_in_rack, dwell_slope, no_wet_foliage, graft_union_known, season_window]
+steps:
+  - "Candidates from TREE 360 / SCAN / TRUNK SCAN leads + truth labels (assisted)"
+  - "Filter: in band, <= max_stem_mm; MARK the rest with diameter_mm and paste_required if > 12 mm"
+  - "Each target: roll align, trap, cut rule, debris falls"
+  - "rootstock_sprout below graft_union_h_m; skirt_lift below 0.5-0.75 m; malformed_panicle in band; water_shoot mostly MARK"
+interlocks: [blade_interlock, work_field_person, no_keep_wood_cuts, debris_zone_clear]
+outputs: [tree_record_prune, marks]
+kpis: [O-13, keep_wood_0, O-23]
+retry: {over_capacity: mark, no_cut_after_close_s: 1, realign: 1}
+gates:
+  - {kind: dwell, ext_m: 0.0, dwell_s: $per_item_s}
+  - {kind: dwell, ext_m: 0.0, dwell_s: 60.0}
+estimate:
+  fixed_s: $tool_change_s
+  per_item_s: $per_item_s
+  items: $expected_n
+console: {tile: "PRUNE", icon: prune, hi: "छँटाई", en: "Prune", order: 10, group: tree_card, show: [jobs],
+          advanced: [max_stem_mm, paste_required_mm]}

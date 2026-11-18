@@ -1,0 +1,21 @@
+entries:
+- id: finaliser_default
+  version: 1
+  file: finaliser_default.yaml
+  sha256: 8d1d109dbdf1c149e9cadbf23f7c4f090c3244782aad9b22187612b7c680293b
+  primitives_api: 1
+- id: resume_check
+  version: 1
+  file: resume_check.yaml
+  primitives_api: 1
+  sha256: 2fb27b08b5db2c207b56fbb7cbd21027777d9074a0913bea2eede3e54ae96339
+- id: target_loop
+  version: 1
+  file: target_loop.yaml
+  sha256: c2b397b95c399c83ff47de51a88e8f9fe0acccc73ade95230f534b2a1f5a97fb
+  primitives_api: 1
+- id: capture_station
+  version: 1
+  file: capture_station.yaml
+  sha256: d0ebd55958f5f0c459242c90e098dd8de1d7d65633443293d99642f7d4fcf22d
+  primitives_api: 1

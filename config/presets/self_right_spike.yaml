@@ -1,0 +1,28 @@
+# RECOVERY: SELF-RIGHT (spike only, MISSION-PRESETS 8 / WP28): report only, needs person-clear + confirmation.
+schema: nandi.preset/1
+id: self_right_spike
+mode: self_right_spike
+version: 1
+kind: recovery
+title: "SELF-RIGHT (spike)"
+season: recovery
+crops: [mango, guava, papaya, banana]
+targets: [none]
+crown: none
+weather: exempt
+slope_limit_deg: 5.0
+ready: {relax: [energy, rtk, season, weather, disk, novnc, geofence, stability, slope, cloud_link]}
+params:
+  initial_roll_deg: {default: 90.0, enum: [60.0, 90.0]}
+preconditions: [fallen_latched, person_clear_confirm]
+steps: ["initial roll 60 / 90 deg", "scripted leg push with the arm folded, crown stowed",
+        "measure success, torque vs forcerange, time"]
+interlocks: [person_clear_confirm]
+outputs: [spike_report]
+kpis: [report_only]
+retry: {}
+gates: []
+estimate:
+  fixed_s: 30.0
+console: {tile: "SELF-RIGHT", icon: spike, hi: "खुद उठो (प्रयोग)", en: "Self-right (spike)", order: 34, group: recovery,
+          show: []}

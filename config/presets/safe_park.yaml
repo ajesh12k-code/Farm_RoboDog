@@ -1,0 +1,33 @@
+# RECOVERY: SAFE PARK (MISSION-PRESETS 8): arm PARK -> blade/jaw open -> crown stow -> if the gates allow and the
+# local link is up, move <= 3 m to the nearest alley edge or headland -> sit on belly rests -> beacon -> power held.
+schema: nandi.preset/1
+id: safe_park
+mode: safe_park
+version: 1
+kind: recovery
+title: "SAFE PARK"
+season: recovery
+crops: [mango, guava, papaya, banana]
+targets: [none]
+crown: none
+weather: exempt
+slope_limit_deg: 5.0
+float_ok: true                     # RTK FLOAT allowed (MP 0.2)
+ready: {relax: [energy, rtk, season, weather, disk, geofence, stability, slope, novnc, local_link, cloud_link]}
+params:
+  move_max_m: {default: 3.0, min: 0.0, max: 3.0}
+  v_mps: {default: 0.18, min: 0.05, max: 0.18}
+preconditions: [local_link_for_move]
+steps: ["arm PARK", "blade / jaw open", "crown stow", "move <= 3 m to the alley edge or headland if allowed",
+        "sit on belly rests", "beacon", "power held"]
+interlocks: [estop_overrides]
+outputs: [park_state]
+kpis: [tools_safe_3s, crown_85s]
+retry: {}
+gates:
+  - {kind: walk, ext_m: 0.0, v_mps: $v_mps}
+estimate:
+  fixed_s: 11.5                    # tools safe 3 s + crown stow <= 8.5 s
+  walk_m: $move_max_m
+  v_mps: $v_mps
+console: {tile: "SAFE PARK", icon: park, hi: "सुरक्षित रुको", en: "Safe park", order: 30, group: recovery, show: []}

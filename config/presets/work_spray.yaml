@@ -1,0 +1,20 @@
+# WORK ASSIST: SPOT SPRAY is DISABLED (Phase D, OQ-16): greyed, "Not in MVP".
+schema: nandi.preset/1
+id: work_spray
+mode: null
+version: 1
+kind: assist
+enabled: false
+disabled_reason: not_in_mvp
+title: "WORK: spot spray (not in MVP)"
+season: work
+crops: [mango, guava, papaya, banana]
+targets: [none]
+params: {}
+preconditions: []
+steps: ["Disabled in the MVP (Phase D, OQ-16)"]
+interlocks: []
+outputs: []
+kpis: []
+retry: {}
+console: {tile: "WORK", icon: spray, hi: "छिड़काव (MVP में नहीं)", en: "Spot spray (not in MVP)", order: 23, group: work}

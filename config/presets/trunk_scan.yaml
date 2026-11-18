@@ -1,0 +1,41 @@
+# TRUNK/BASE SCAN: the most actionable in-band job (MISSION-PRESETS 3b).
+schema: nandi.preset/1
+id: trunk_scan
+mode: trunk_scan
+version: 1
+kind: camera
+title: "TRUNK / BASE SCAN"
+season: trunk_scan
+crops: [mango, guava, papaya, banana]
+targets: [tree_ids, block_sample]
+crown: none
+weather: non_contact
+slope_limit_deg: 3.0
+params:
+  azimuths: {default: 4, min: 2, max: 4}                   # 2 alley-side azimuths in hedgerows
+  heights_m: {default: [0.2, 0.5, 0.8]}
+  standoff_m: {default: 0.2, min: 0.15, max: 0.25}
+  per_azimuth_s: {default: 20.0, min: 8.0, max: 60.0}      # move between stand-offs + ring low + 3 wrist frames (assumption)
+  min_light_lux: {default: 2000, min: 200, max: 20000}
+preconditions: [ready_common, dwell_slope, work_field_clear, wrist_camera_ok, light, graft_union_known]
+steps:
+  - "Stop at 4 azimuth stand-offs around the trunk (or the 2 alley-side azimuths in hedgerows)"
+  - "Ring low frame + wrist close-ups at 0.2, 0.5, 0.8 m"
+  - "Leads per crop and season (mango mealybug / borer frass / gummosis; guava wilt; papaya collar rot; banana weevil)"
+  - "Rootstock sprouts below graft_union_h_m -> flag PRUNE"
+interlocks: [work_fields, hand_in_envelope, arm_speed_cap, wrist_leaf_clearance_2cm, blade_locked_open, base_drift_2cm]
+outputs: [tree_record_trunk, leads_trunk, prune_flags]
+kpis: [trunk_lead_recall_09, azimuths_imaged]
+retry: {blur: 2}
+gates:
+  - {kind: walk, ext_m: 0.0, v_mps: 0.1}
+  - {kind: dwell, ext_m: 0.0, dwell_s: $per_azimuth_s}
+  - {kind: dwell, ext_m: 0.0, dwell_s: 60.0}
+estimate:
+  fixed_s: 5.0
+  per_tree_s: "azimuths * per_azimuth_s"
+  walk_m: "azimuths * 1.0"
+  walk_s: 0
+  disk_mb_per_tree: 4.0
+console: {tile: "TRUNK", icon: trunk, hi: "तना जाँच", en: "Trunk / base scan", order: 4, group: tree_card, show: [azimuths],
+          advanced: [standoff_m, per_azimuth_s]}

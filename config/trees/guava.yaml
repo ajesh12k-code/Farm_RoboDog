@@ -1,0 +1,34 @@
+# Atharv Nandi tree generator parameters: guava (grafted, hedge-capable). WP23, ORCHARD-MVP-SPEC 3.3.
+# Ranges are (assumption) inside OS 3.3 (H 1.5-2.5 m, fruit 136-164 g, 6-8 cm). Schema nandi.tree_species/1.
+schema: nandi.tree_species/1
+species: guava
+archetype: canopy
+label: "Guava (Allahabad Safeda / Lalit class), grafted, hedge"
+height_m: [1.5, 2.5]
+trunk_frac: 0.25
+trunk_r_m: [0.04, 0.05]
+canopy_r_frac: 0.40
+graft_union:
+  h_m: [0.2, 0.3]
+  rootstock_sprouts: [1, 2]
+  sprout_mm: [4, 7]
+scaffolds: {n: [3, 4], r_m: 0.025, branches_each: 2, branch_r_m: 0.012}
+skirt: {n: [1, 2], z_m: [0.3, 0.65], diam_mm: [6, 11]}
+skirt_mark: {n: [1, 1], z_m: [0.45, 0.6], diam_mm: [19, 21]}  # OS 1.2 step 7: a 20 mm skirt branch is MARKed
+water_shoots: {n: [1, 1], z_m: [1.5, 1.7], diam_mm: [14, 18]}  # OS 1.2 step 7: water shoot at 1.6 m, MARK
+dead_twigs: {n: [0, 1], diam_mm: [5, 9]}
+foliage: {blobs: 34, blob_m: [0.15, 0.15, 0.05], rgba: [0.22, 0.50, 0.18, 1.0]}
+fruit:
+  n: [12, 18]
+  length_m: [0.06, 0.08]
+  shape: [0.48, 0.48, 0.50]
+  shell_z_m: [0.45, 2.2]
+  pedicel_m: [0.02, 0.035]   # short stalk, clipped with a leaf pair
+  min_gap_m: 0.10
+  demo_mature_in_band: 2     # OS 1.2 step 6: 2 guavas clipped on G-2
+  mature_frac_out_of_band: 0.5
+leaves: {n: 12, size_m: [0.09, 0.04], z_m: [0.45, 1.5]}
+decals: {n: 4, r_m: [0.025, 0.035]}
+leaf_decals: {n: 2, r_m: [0.004, 0.0075]}
+panicles: null
+bags: false

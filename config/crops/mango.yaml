@@ -1,0 +1,57 @@
+# Atharv Nandi crop profile: mango. WP23, ORCHARD-MVP-SPEC 4.4, MISSION-PRESETS 4-6. Schema nandi.crop_profile/1.
+# Project decision OQ-01 A: North India (UP) HDP mango is the first pilot crop (harvest in the MVP).
+# Labels: (cited) carries a URL from ORCHARD-RESEARCH; everything else is (assumption).
+schema: nandi.crop_profile/1
+crop: mango
+cultivars: [Dashehari, Langra, Chausa, Amrapali]
+default_cultivar: Dashehari
+mvp_scope: harvest              # harvest | scout_mark (OQ-01 A)
+priority: 1
+harvest_method: clip            # MISSION-PRESETS 5: CLIP (T2), one round, all mature in-band fruit
+methods: [clip]
+tool: T2
+pool_kind: connect              # OS 3.4: slots 0-4
+one_round: true
+pull_release: false             # snap-off is a defect; 12 N pull exists only as a failure-mode test
+pedicel_leave_cm: {default: 2.0, min: 1.0, max: 5.0}   # project brief; OQ-04 asks KVK/CISH
+tau_detach_nm: null
+placement_speed_max_m_s: 1.0    # (assumption) stalk-down into its own desap tray cell
+mass_kg: [0.15, 0.35]           # Amrapali 150-350 g (cited, nhb man013)
+skin_colour_cue: false          # harvested mature-green: skin colour is NOT a maturity cue (OS 4.4)
+maturity_cues: [shoulder_rise, stem_end_colour, days_since_fruit_set]
+offrobot_checks: [specific_gravity, tss]
+stages:
+  - id: immature
+    harvest: false
+    days_since_fruit_set: [0, 83]
+    cues: {shoulder_rise_mm: [0.0, 1.0], stem_end_colour: green}
+    rgba: [0.42, 0.62, 0.22, 1.0]
+  - id: mature
+    harvest: true
+    days_since_fruit_set: [84, 120]   # Dashehari ~84 d (cited, CISH / ISHS 992_69); upper bound (assumption)
+    cues: {shoulder_rise_mm: [2.0, 5.0], stem_end_colour: yellowing}
+    rgba: [0.42, 0.62, 0.22, 1.0]     # identical to immature on purpose: no skin-colour cue
+harvest_window: {basis: days_since_fruit_set, days: [84, 104]}
+bagging: {used: true, days_after_fruit_set: [28, 35], harvest_bagged: refuse}   # CISH bagging (cited); OQ-15 A
+calendar_up:                     # hortportal (cited)
+  Dashehari: {harvest: ["06-08", "07-07"]}
+  Langra: {harvest: ["06-15", "07-15"]}     # (assumption)
+  Chausa: {harvest: ["07-01", "07-31"]}     # (assumption)
+  Amrapali: {harvest: ["07-01", "08-10"]}
+prune:
+  max_stem_mm: 12               # PRUNER capacity (assumption)
+  paste_required_mm: 12         # cut > 12 mm -> Bordeaux paste (MARK)
+  window_months: [7, 8, 9]      # post-harvest July-September (cited, IndHort 117191)
+  jobs: [rootstock_sprout, skirt_lift, dead_twig, malformed_panicle, water_shoot, tip_back_20cm]
+  skirt_below_m: 0.75
+min_functional_leaves: null
+symptoms:
+  - {class: sooty_mould, unit: per_shoot, bands: [mid, high], seasons: [fruit_set, mature], scale: canopy}
+  - {class: powdery_mildew, unit: per_panicle, bands: [mid, high], seasons: [panicle], scale: canopy}
+  - {class: anthracnose, unit: per_leaf, bands: [low, mid], seasons: [mature, post_harvest], scale: leaf}
+  - {class: malformation, unit: per_panicle, bands: [low, mid, high], seasons: [panicle], scale: canopy}
+  - {class: webber, unit: per_shoot, bands: [mid, high], seasons: [post_harvest, mature], scale: canopy}
+  - {class: mealybug, unit: trunk, bands: [low], seasons: [panicle, fruit_set], scale: trunk}
+  - {class: stem_borer_frass, unit: trunk, bands: [low], seasons: [all], scale: trunk}
+  - {class: gummosis, unit: trunk, bands: [low], seasons: [all], scale: trunk}
+  - {class: hopper_honeydew, unit: per_panicle, bands: [mid, high], seasons: [panicle, fruit_set], scale: canopy}

@@ -1,0 +1,48 @@
+# LEAF SCAN: close-ups including undersides (MISSION-PRESETS 3). Papaya has no leaves in band (n/a: crown-only).
+schema: nandi.preset/1
+id: leaf_scan
+mode: leaf_scan
+version: 1
+kind: camera
+title: "LEAF SCAN"
+season: leaf_scan
+crops: [mango, guava, banana]     # papaya: n/a crown-only (MP 3); banana: in-band dead / drooping blades only
+targets: [tree_ids]
+crown: none                       # flagged leaves above the band: crown at 1.10 m stowed, tilt up (label not_close_up)
+weather: leaf
+slope_limit_deg: 3.0              # dwell <= 3 deg cross
+params:
+  branch: {default: auto}                                  # clock + h from a flag, or auto
+  n_leaves: {default: 12, min: 1, max: 24}                 # 4 azimuths x {young, mature} x {upper, under} (assumption)
+  n_high: {default: 1, min: 0, max: 4}                     # flagged leaves above the band, crown view
+  standoff_m: {default: 0.15, min: 0.12, max: 0.20}
+  frames_per_side: {default: 3, min: 1, max: 6}
+  led: {default: true}
+  dawn_mode: {default: false}                              # before 08:00, lowered light threshold
+  min_clearance_m: {default: 0.02, min: 0.02, max: 0.05}
+  min_light_lux: {default: 2000, min: 200, max: 20000}
+  dawn_light_lux: {default: 500, min: 100, max: 2000}      # dawn mode threshold with the LED on (assumption)
+  per_leaf_s: {default: 10.0, min: 4.0, max: 30.0}         # median <= 10 s per leaf (KPI O-08)
+preconditions: [ready_common, dwell_slope, no_wet_foliage, work_field_clear, wrist_camera_ok, light, crop_leaves_in_band]
+steps:
+  - "Stop at the low-band stand-off; enter WORK (beacon green); close the base pose loop"
+  - "Select leaf targets from leaf_k sites + depth (leaf_scan.py)"
+  - "Upper side: wrist approach to 0.15 m, 3 frames"
+  - "Underside: no-contact view, wrist below the leaf and pitched up"
+  - "Leads (pest_detect.py), labelled colony/symptom level"
+  - "Flagged leaves above the band: crown at 1.10 m, tilt up to +45 deg, label not_close_up"
+  - "Park the arm"
+interlocks: [work_fields, hand_in_envelope, arm_speed_cap, wrist_leaf_clearance_2cm, blade_locked_open, base_drift_2cm]
+outputs: [leaf_records, findings, leads_per_leaf]
+kpis: [O-08]
+retry: {blur: 2, unreachable: out_of_reach_marked, depth_below_min_z_back_off_m: 0.03}
+gates:
+  - {kind: dwell, ext_m: 0.0, dwell_s: "$per_leaf_s"}
+  - {kind: dwell, ext_m: 0.0, dwell_s: 60.0}               # the whole leaf scan is a long dwell at one stand-off
+estimate:
+  fixed_s: 20.0                    # positioning 15 + WORK entry 5 (OS 1.2 budget)
+  per_item_s: $per_leaf_s
+  items: "n_leaves + n_high"
+  disk_mb: "0.5 * (n_leaves + n_high)"
+console: {tile: "LEAF", icon: leaf, hi: "पत्ती जाँच", en: "Leaf scan", order: 3, group: tree_card, show: [n_leaves, dawn_mode],
+          advanced: [standoff_m, frames_per_side, n_high, per_leaf_s]}

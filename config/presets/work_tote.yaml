@@ -1,0 +1,32 @@
+# WORK ASSIST: SAMPLE / TOOL TOTE, <= 3 kg (MISSION-PRESETS 7). Not a field crate (OQ-20).
+schema: nandi.preset/1
+id: work_tote
+mode: tote_carry
+version: 1
+kind: assist
+title: "WORK: sample / tool tote"
+season: work
+crops: [mango, guava, papaya, banana]
+targets: [none]
+crown: none
+weather: contact
+slope_limit_deg: 5.0
+params:
+  tote_id: {default: tote_1}
+  tote_kg: {default: 1.0, min: 0.0, max: 3.0}
+  distance_m: {default: 10.0, min: 0.5, max: 200.0}           # route to the headland (from the caller's plan)
+  v_mps: {default: 0.18, min: 0.05, max: 0.18}
+preconditions: [ready_common, tote_on_deck, crown_stowed, slope_walk]
+steps: ["Walk the route to the headland stowed", "Stop within 0.5 m of the drop point", "Report kg moved and Wh"]
+interlocks: [common, crown_stowed]
+outputs: [kg_moved, wh]
+kpis: [kg_per_wh, arrival_05m]
+retry: {stuck: recovery}
+gates:
+  - {kind: walk, ext_m: 0.0, v_mps: $v_mps}
+estimate:
+  fixed_s: 5.0
+  walk_m: $distance_m
+  v_mps: $v_mps
+console: {tile: "WORK", icon: tote, hi: "सामान ढोना", en: "Work: tote", order: 20, group: work, show: [distance_m],
+          advanced: [v_mps]}

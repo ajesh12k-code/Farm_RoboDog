@@ -1,0 +1,63 @@
+# WP40 synthetic dataset classes (CAMERA-TRAINING C.2). Owner: WP40.
+#
+# Every class names its detection head (A orchard, B safety/privacy), whether it gets a box and RLE mask
+# (`mask: true`: it must be modelled as at least one DISTINCT geom with a truth record, because the MuJoCo
+# segmentation pass only sees geoms; a texture or material change has no mask), the geom group its stub
+# geoms live in (0 wood/ground, 1 fruit, 3 foliage, 4 decals, thin label geoms and actors; group 5 is
+# query-only and is never labelled), its Head C semantic class, and its allowed instance attributes with
+# their enumerated values. `mask: false` classes are image-level tags or instance attributes only.
+#
+# Privacy (privacy rule, C.7): `person` is whole-body only. It carries no face geometry and no identity
+# attribute. `labels.validate_classes` refuses any attribute named in `forbidden_attrs` on any class, and any
+# attribute at all on `person` beyond the generic ones in `generic_attrs`.
+version: 1
+
+# Head C (semantic PNG). The pixel value is the list index. Background (no geom) is `sky`.
+semantic: [ground, foliage, trunk, sky, fruit, water, other]
+
+# Attributes the generator adds to every instance from the render (not declared per class).
+generic_attrs: [occlusion, season]
+
+forbidden_attrs: [face, face_box, face_landmarks, identity, person_id, name, age, gender, sex, ethnicity,
+                  skin_tone, caste, religion, biometric, gait_signature, re_id, track_identity]
+
+classes:
+  # ------------------------------------------------------------------ Head A, orchard
+  - {name: fruit, head: A, mask: true, group: 1, semantic: fruit,
+     attrs: {species: [mango, guava, papaya, banana], stage: [green, breaker, ripe, overripe]}}
+  - {name: bag, head: A, mask: true, group: 4, semantic: other, attrs: {state: [ok, torn]}}
+  - {name: panicle, head: A, mask: true, group: 4, semantic: foliage,
+     attrs: {condition: [normal, malformed, mildew]}}
+  - {name: leaf_symptom, head: A, mask: true, group: 4, semantic: foliage,
+     attrs: {symptom: [sooty_mould, mildew, anthracnose, malformation, webber, mealybug, shoot_gall,
+                       guava_wilt, fruit_fly, bark_caterpillar_webbing, prsv, leaf_curl, sigatoka,
+                       bunchy_top]}}
+  - {name: trunk_base, head: A, mask: true, group: 4, semantic: trunk,
+     attrs: {kind: [lesion, gum, frass, sprout]}}
+  # `missing` bands have no geom, so they are an image-level tag (`band_missing`), never a box.
+  - {name: band, head: A, mask: true, group: 4, semantic: trunk, attrs: {state: [ok, torn]}}
+  - {name: trap, head: A, mask: true, group: 4, semantic: other,
+     attrs: {kind: [me, sticky], catch_bin: [none, low, mid, high], present: [true]}}
+  - {name: ribbon_colour, head: A, mask: false, semantic: other,
+     attrs: {colour: [red, yellow, blue, white]}}
+  - {name: sleeve, head: A, mask: true, group: 4, semantic: trunk, attrs: {}}
+  - {name: prop, head: A, mask: true, group: 0, semantic: trunk, attrs: {}}
+  - {name: weed, head: A, mask: true, group: 3, semantic: foliage, attrs: {}}
+  - {name: mulch, head: A, mask: true, group: 4, semantic: ground, attrs: {}}
+  - {name: wet_patch, head: A, mask: true, group: 4, semantic: ground, attrs: {}}
+  - {name: puddle, head: A, mask: true, group: 4, semantic: water, attrs: {}}
+  - {name: broken_limb, head: A, mask: true, group: 0, semantic: trunk, attrs: {}}
+  - {name: fallen_fruit, head: A, mask: true, group: 1, semantic: fruit,
+     attrs: {species: [mango, guava, papaya, banana]}}
+  - {name: drip_lateral, head: A, mask: true, group: 4, semantic: other, attrs: {}}
+  - {name: sooty_sheen, head: A, mask: true, group: 4, semantic: foliage, attrs: {}}
+  - {name: ants_on_band, head: A, mask: true, group: 4, semantic: trunk, attrs: {}}
+  # ------------------------------------------------------------------ Head B, safety and privacy
+  - {name: person, head: B, mask: true, group: 4, semantic: other, attrs: {}}
+  - {name: animal, head: B, mask: true, group: 4, semantic: other,
+     attrs: {kind: [dog, cattle, nilgai, monkey]}}
+  - {name: crate, head: B, mask: true, group: 4, semantic: other, attrs: {}}
+  - {name: tool, head: B, mask: true, group: 4, semantic: other, attrs: {}}
+  - {name: dock_tag, head: B, mask: true, group: 4, semantic: other,
+     attrs: {role: [backboard, apron], cover: [clear, dust, leaves]}}
+  - {name: fallen_wire, head: B, mask: true, group: 4, semantic: other, attrs: {}}

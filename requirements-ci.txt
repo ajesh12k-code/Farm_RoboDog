@@ -1,0 +1,8 @@
+# ROS-free unit tests (Python 3.11). The live nodes need ROS 2 Humble: see docker/.
+mujoco>=3.3,<3.4
+numpy>=1.24,<2
+pytest>=7
+pytest-cov>=5,<7   # coverage gate (.coveragerc; line + branch gate: tools/coverage_gate.py)
+pyyaml>=6          # config/*.yaml (trees, crops, hal)
+# Optional: ompl==2.0.1 (WPCAP arm planner backend; manylinux2014 aarch64/x86_64 wheels for cp310-cp313).
+# Without it controllers.planning falls back to its pure-Python RRT-Connect and the OMPL tests skip.

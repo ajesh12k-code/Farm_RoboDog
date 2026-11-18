@@ -1,13 +1,40 @@
 # ROS 2 build artifacts
 build/
+# ...but keep the vendored three.js build (web/vendor/SHA256SUMS pins it)
+!atharv_nandi/web/vendor/three/build/
 install/
 log/
 
-# Python caches
+# Python caches and tooling
 __pycache__/
 *.py[cod]
 *.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.venv/
+venv/
 
-# Simulator logs and large RL checkpoints
+# Simulator logs, core dumps and RL artifacts (policies are trained locally, never committed)
 MUJOCO_LOG.TXT
+# core dumps (repo root only: atharv_nandi/core/ is the logic package)
+/core
+/core.[0-9]*
 rl_training/models/*.zip
+rl_training/logs/
+rl_training/tensorboard/
+
+# Editor / OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Console runtime state (audit log, persisted E-STOP latch)
+runs/
+
+# colcon smoke install (tools/ros_launch_smoke.sh)
+/.colcon/

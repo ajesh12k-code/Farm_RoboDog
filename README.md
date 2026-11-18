@@ -1,187 +1,700 @@
-# FarmDog6 — Agricultural Hexapod Mobile Manipulator
+# Atharv Nandi — Agricultural Hexapod Mobile Manipulator
 
-A modular **ROS 2 Humble + MuJoCo + Gymnasium + Stable-Baselines3** simulation and control workspace for **KisaanuNexusFarmDog6**, a 25-DOF 6-legged agricultural robot engineered for uneven farm terrain, low soil compaction, active dorsal-arm balance stabilization, and autonomous crop harvesting.
+A modular **ROS 2 Humble + MuJoCo + Gymnasium + Stable-Baselines3** simulation and control workspace for **Atharv Nandi**, a 25-DOF 6-legged agricultural robot engineered for uneven farm terrain, low soil compaction, active dorsal-arm balance stabilization, and autonomous crop harvesting.
+
+Everything runs in one Docker container: physics, the ROS 2 nodes, a browser control UI and a virtual desktop (noVNC) showing the MuJoCo viewer and the Tk operator console. No local ROS install is needed.
 
 ---
 
-## Robot Architecture (`KisaanuNexusFarmDog6`)
+## Robot Architecture (Atharv Nandi)
 
 * **18-DOF Hexapod Locomotion (`FR, FL, MR, ML, RR, RL`):** Six 3-DOF legs (`hip_roll`, `thigh_pitch`, `calf_pitch`) capable of switching live between an alternating tripod gait and a trained 23-DOF PPO locomotion/balance policy.
 * **Full-Length Dorsal Cargo Basket (`dorsal_basket`):** Top-mounted `0.64 m × 0.24 m` harvest bin seated cleanly above the chassis so all 6 hip joints operate with zero mechanical interference.
 * **1-DOF Dorsal Sliding Gantry (`gantry_slide`):** Overhead linear rail (`±0.26 m` travel) spanning the spine above the basket, enabling the manipulator to reach crops ahead of the chassis and slide backward to deposit produce into the bin.
-* **6-DOF Ground-Reaching Harvesting Arm & Gripper:** Articulated 4-DOF arm (`arm_yaw`, `arm_shoulder`, `arm_elbow`, `arm_wrist_pitch` with `0.34 m + 0.34 m` links) plus a 2-finger parallel gripper (`finger_left`, `finger_right`). When empty during locomotion, the 5-DOF dorsal gantry/arm stays tucked at rest and deploys dynamically as a counterweight or ground-bracing stabilizer during steep climbs, slips, or external pushes.
+* **6-DOF Ground-Reaching Harvesting Arm & Gripper:** Articulated 4-DOF arm (`arm_yaw`, `arm_shoulder`, `arm_elbow`, `arm_wrist_pitch` with `0.34 m + 0.34 m` links) plus a 2-finger parallel gripper (`finger_left`, `finger_right`; 9 cm open, 4 cm stroke per finger, so it can pinch the 7 cm crops; `gripper_tip` 0.105 m from the wrist pivot, stiff high-friction pad contacts so a pinched crop does not creep out). When empty during locomotion, the 5-DOF dorsal gantry/arm stays tucked at rest and deploys dynamically as a counterweight or ground-bracing stabilizer during steep climbs, slips, or external pushes.
+
+### Physics, Mounts and Load (alignment v1, orchard target)
+
+Every number in `atharv_nandi/sim/models/AtharvNandi/atharv_nandi.xml` carries a tag in its comment: MEASURED (headless run), CITED (source), DERIVED (arithmetic) or ASSUMED. Acceptance tests: `tests/test_physics_alignment.py` (AT1-AT9); harness and pre-alignment baselines: `tools/physics/measure_baseline.py`, `tools/physics/baseline_pre_alignment.json`.
+
+* **Mass 31.8 kg (DERIVED):** trunk body 15.8 kg as explicit sub-geoms (frame 5.0 ASSUMED, 6 hip-abduction motors 0.85 kg each CITED AK80-64 class, battery 3.2 kg = 500 Wh ASSUMED placed low and forward, electronics 1.5 ASSUMED, gantry rail + carriage 1.0); basket 0.9; arm chain 1.6 (shoulder motor in the turret); each leg 2.25 kg moving mass (hip body 1.85 kg with the thigh + knee motors at the thigh joint, thigh 0.25, calf 0.12, foot 0.03; ASSUMED). That is the frozen `atharv_nandi_v1.xml`; with the WP1 additions below the robot is **34.39 kg**. Home CoM x is −0.007 m from the 6-foot centroid (MEASURED, limit ±0.010; v1 +0.009): WP1 moved the battery from trunk x 0.06 to 0.11 to keep this rule with the mast at the rear.
+* **Orchard additions (WP1, all joint-less, 2.585 kg; cap 2.6, ORCHARD-MVP-SPEC 2.6):** sectioned **crown mast** at trunk (−0.30, 0, 0.05): drive, outer tube (world 0.45-1.06 m), fixed ring with cameras `ring_0..3` (yaw 0/90/180/270, 25° down, fovy 83.6°, lens 0.985 m at the keyframe / 0.978 m standing) and site `mast_lidar`, the `beacon` lamp, and three nested sections `mast_s1 ⊃ mast_s2 ⊃ mast_s3` that WP24 moves by `body_pos` (ext/3 each, stroke 1.60 m). Stowed they sit inside the tube (0.42-1.06 m). `crown_head` (0.4 kg, box 0.12 m, contype 0) carries `crown_cam` (fovy 60°), `crown_ref`, `anemometer` and `gnss_antenna` (sensor `gnss_pos`); lens 1.10 m stowed, 2.70 m fully up. Mast system 2.325 kg (cap 2.4), moving 0.80 (cap 0.8). **3-cradle tool rack** on the right side (sites `cradle_T2/T4/T5` at the WP0c frozen points). **8-cell desap tray** in the front basket compartment (2 lanes beside the gantry rail × 4 cells, sites `tray_cell_0..7`), divider at x −0.05, **papaya cradle** in the rear-left lane, `ballast` body for transferred payload. Collidable **bumper** (touch sensor `bumper`) and 4 **belly rests** (12 mm below the trunk box). Lift-point marks, side e-stop heads, handheld e-stop receiver site, TCP site `tcp_range`. Every robot geom is in group 2 (the mass-only motors, battery and electronics too, with alpha 0: not drawn, no wind drag), `crop_item_1` in group 1, so safety rays {0, 1}, coverage rays {0, 1, 3} and group-5 queries (foliage envelope, rope lines) pass through the robot. The mast and everything on it never collide. The gantry rail now ends at x −0.262 and the rear pillar sits at −0.245, clear of the mast tube (WP0c change request). Two hooks in `atharv_nandi/sim/hooks/beacon.py` (a fault in one never disables the other): `beacon`, the lamp colour per operator state (`/nandi/beacon`, requests on `/nandi/beacon/request`; red only from the runner hold), and `handheld_estop`, the console-independent handheld e-stop input (`/nandi/handheld_estop` → `/nandi/handheld_estop/state`; paired to the first device heard, 0.5 s link timeout in sim and wall time; the safety supervisor latches on its `estop_request` (WP6, reason `handheld`), and the lamp turns red from the resulting hold). In the composed `orchard_lite` / `orchard_demo` worlds the robot keeps these properties (nq / nv / nu 171 / 151 / 31, mast write adds no DOF, robot geoms group 2 only, stands 2 s with the crown at 1.6, 0 contacts on the non-colliding parts; MEASURED). A 140 mm papaya does not fit the rear cradle lane beside the gantry rail; that is an open layout decision in the contract. Tests: `tests/test_robot_additions.py`.
+* **Crown mast runtime (WP24):** `atharv_nandi/sim/hooks/mast.py` moves the WP1 sections every physics step (hook `mast_step` at the substep point: `body_pos` of `mast_s1..s3` = ext/3 each, rate limit 0.2 m/s in [0, 1.60], ≤ 0.4 mm per 2 ms step, full stroke 8.0 s; lens 1.09 m stowed, 1.69 at ext 0.6, 2.69 at 1.6 standing, MEASURED). The setpoint has **one writer**, the arbiter in `atharv_nandi/core/mast.py` (priority e-stop > safety > recovery > preset; a winning request drops the lower ones, so nothing re-raises by itself; `safety` requests can only retract). Requests: `/nandi/mast/cmd` (`{source, target_ext | band: stow/low/mid/high, reason, gimbal_deg?}`, `{release}`, `{aim_deg}`) or in-process `bus.values["mast_control"].submit(MastRequest)`; state on `/nandi/mast/state` (10 Hz + on change; `ext_m`, `lens_z`, `gimbal`, `arbiter_source`, `gated`/`reason`/`detail`, `strike`, `clearance_m`) and in `bus.values["mast"]`. Every raise is gated: e-stop, standing, |roll| ≤ 3°, wind < 10 m/s and no gust, WP6 gates (`register_gate`), and the **swept-cylinder clearance** ≥ 0.10 m against registry wood, foliage envelopes and rope lines, `alley_clear_height_m`, plus mast-LiDAR rays (refusals use the MISSION-PRESETS reason codes, e.g. `crown_clearance` / `rope:rope_B1_B2`). The motion gates are re-checked every tick while a raise runs: a failing gate (e.g. the robot starts walking) holds the raise at once and drops it after 0.5 s (`regate:<detail>`). **Geometric strike**: every head geom (box, anemometer, GNSS puck) and the top section vs wood / envelope / ropes with `mj_geomDistance` every step (< 0.05 m stops mast motion toward the obstacle, a safety retract always runs; ≤ 0 retracts at once, also right after an e-stop brake that held through a strike; the head never pushes the robot: tilt change 0.01° in the test). Every `/nandi/mast/cmd` message of a tick is processed in order (overflow counted in `cmd_lost`). Wind/gust and tilt > 12° backstop retracts; the e-stop hold brakes the sections in place (a `brake()` outside a hold latches until `release("estop")`); a recovery retract completes at its target; a non-safety lowering held by a near obstacle for 1 s is flagged `lower_blocked` for the requester to escalate. Virtual gimbal (pan ±180°, tilt −60…+45°, an out-of-range tilt is clamped and flagged `gimbal_clamped`) writes `cam_quat[crown_cam]`; sim-state provider `mast {ext_m, gimbal, crown_lens_z, arbiter_source}` lets renderers show the raised head. Tests: `tests/test_mast.py`.
+* **Actuators:** legs AK80-64 class, `kp` 300, `kv` 6, ±100 N·m (class `leg_motor`); targets rate-limited to 5 rad/s in `tripod_gait.py` (`MAX_JOINT_SPEED_RPS`); 48 N·m continuous is reported (RMS), not clamped. Arm: yaw ±15, shoulder ±30, elbow ±15, wrist ±5 N·m; gantry `kp` 2000 ±80 N. No body `gravcomp` (MuJoCo applies it to the root freejoint too, which lifted the chassis 8.3 N, MEASURED): arm gravity is a position-target feed-forward tau_g / kp (`arm_ik_solver.gravity_offsets`), so the motors carry it and `/nandi/joint_states` effort reports it. Tripod stride 0.045 m per unit vx, turn stride 0.035 m (MEASURED: speed 0.22-0.27 m/s at vx 1, < 3 feet in contact 8-27 % of walking ticks). Harvest command slew: yaw 1.5, other arm joints 2.0 rad/s, gantry 0.5 m/s.
+* **Solver / contact:** elliptic friction cones, `impratio` 10, `dt` 0.002 s, `implicitfast`; default friction 0.8 (ASSUMED dry soil / rubber); hard ground `solref` 0.01 on every terrain geom; crops `condim` 6 (rolling friction, so a released crop does not roll away); stiff basket contact.
+* **Measured on flat ground (vx = 1, 6 s, 2026-11-17):** 0.55 m/s at 0 kg and 0.50 m/s at 10 kg basket payload (was 0.31 m/s at kp 120); stand at 15 kg sinks the trunk 3.5 mm; turn ±1 gives 91-96 °/s; harvest of `crop_item_1` 10/10 at 0 and 10 kg.
+* **Mount sites** (invisible, size 6 mm): `imu` (sensors `imu_quat`, `imu_gyro`, `imu_acc`), `head_cam`, `wrist_cam` (equal the `camera_rig` poses), `tool_flange` (sensors `tool_flange_f` / `tool_flange_t`), `basket_payload` (payload CoM reference, trunk z 0.096 m), `mast_base` (deck top, 3 cm forward; the WP1 crown mast is the body `mast_base` at x −0.30), `front_mount`, `rear_mount`, `tow_dock`. Ratings (basket 10 kg walking / 15 kg absolute, tool flange 2.0 kg to 0.5 m reach and 1.5 kg to 0.8 m, mast head 1.5 kg) are owned by the stability / load package (`atharv_nandi/core/load_model.py`), not this model.
+* **Orchard feasibility (WP0c):** `tools/feasibility_sweep.py` sweeps the orchard MVP targets on the full layout: sectioned crown mast at trunk x −0.30 (0.6 kg head), 3-cradle rack with tools, 3 kg basket, T4 + fruit. The rules are the pick band z ≤ 0.8 m, ≤ 80 % of the measured reach, IK for the approach plus a 5 cm exit, and no arm collision with the robot or tree wood. The T4 jaws must also keep 15 mm from wood and neighbouring fruit over the whole twist stroke (pre-roll −20° to +45°, or mirrored). Each frozen T4 pose records its safe twist directions (`twist.dirs_ok`, `twist.preferred`). The tool also measures T4 load (1.2 / 1.8 kg), creep (0-10°, counted from arrival) and the full-layout stability matrix. Inputs, frozen targets and every result, with run ids and recorded inputs, are in `config/fields/orchard_candidates.json`. Writes are atomic and locked, and `stale_blocks` lists any block whose inputs changed. The findings are in feasibility-report. Headline (MEASURED, capped runner, runs ending `96aadf8`):
+  * **Targets.** 183 of 208 candidates frozen, 25 MARKed; the 5 × 3 m mango variant gives the same R1 result.
+  * **Twist direction.** 7 of the 15 papaya poses are clear only when twisted "−", but WP8 `twist_pick` starts every twist with "+" (change request).
+  * **Load.** The spec gate passes. The model-headroom gate fails at 1.8 kg (elbow 83 %, wrist 82 % of forcerange), so `load.pass` is false. The sag gate is vacuous as written (ideal feed-forward); a feed-forward that leaves out the fruit sags 42-62 mm.
+  * **Creep and dwell.** Creep per 20 s is 3.1-10.4 mm at 3° and 7.0-16.9 mm at 5°. The dwell limit is 5° per 20 s pick cycle and 3° for a 60 s dwell; at 5° rear down the pose loop re-approaches every ≈ 30 s.
+  * **Stability.** The flat crown-up tripod margin is 0.096 m. The 0.04 m start gate holds to 6° at PARK, but only to 4° at ext 1.6 with T4 holding 1.8 kg. Every statically unstable row is at a tilt of 10° or more.
+  * **What the matrix describes.** It is the pre-WP1 layout (`atharv_nandi_v1.xml`), whose 0.6 kg head puts the modelled mast over the 2.4 / 0.8 kg budget (2.6 / 1.0 kg). The OS 2.3 table comes from the WP6 re-run on the shipped robot, and WP6 must re-run it for the new worst T4 pose.
+  * **Mast mount.** The mast at (−0.30, 0) overlapped the rear gantry rail end and pillar (resolved in WP1).
+
+  Tests: `tests/test_feasibility.py`. It re-verifies every frozen target, leaf, rack and crate pose on the live model; `NANDI_SLOW=1` re-runs the sweep, creep and matrix.
+
+* **Known limits:** in the orchard scene the tripod gait does not cross a 0.10-0.15 m bund reliably, and with the WP1 crown mast it tips over on it: AT9 (report-only, 10 seeds, 30° bund edges, MEASURED) crosses 1/10 at 0.10 m with **8/10 falls** and 0/10 at 0.15 m with 10/10 falls (v1 without the mast: 4/10 crossed, 0 falls at 0.10 m; 0/10 crossed, 2/10 falls at 0.15 m). The robot pitches nose-up about 20° on the bund face and goes over backwards; the cause is the 2.3 kg mast at the rear (trunk x −0.30): with its mass set to ~0 the WP1 model crosses 3/10 with 0 falls (1/10 falls at 0.15 m); moving the mount to x +0.03 gives 3/10 with 3 falls, a 4 cm forward trunk CoM 2/10 with 1 fall, balance gain 2 0/10 with 3 falls, vx 0.5 0/10 with 8 falls (probes, capped runner). **Do not drive the crown-mast robot over a bund** (the orchard_demo 0.10 m R2/R3 headland bund included) until the gait clearance package plus a body pitch / uphill shift (WP21) or a project decision on the mount lands; fewer than 3 feet are in contact for 8-27 % of straight-walking ticks (AT3 gate 30 %) and 42-53 % of in-place turning ticks (MEASURED; pre-alignment 15-24 %); rough-clod steps tilt the trunk 10-14° in some seeds at 0 kg (AT3 rough limit 15°); armature 0.02 is ASSUMED until the rotor inertia is known.
+
+---
+
+## Quick Start (Docker)
+
+Requirements: Docker (Linux, macOS or Windows/WSL 2). From the repository root:
+
+```bash
+docker/run.sh
+```
+
+The first run builds the `atharv-nandi-sim` image (ROS 2 Humble, MuJoCo 3.3, NumPy 1.26), then starts the whole stack with the repository bind-mounted at `/ws`, so code edits only need a container restart, not a rebuild.
+
+| What | URL |
+| --- | --- |
+| Browser operator console (Hindi first: orchard map, tree card, preset bar, queue, crown gauge, recovery menu, job sheets, E-STOP, driving, pilot panels) | <http://localhost:8080> |
+| Health check (JSON; also the Docker `HEALTHCHECK`) | <http://localhost:8080/healthz> |
+| Virtual desktop: MuJoCo 3D viewer + Tk operator console | <http://localhost:6080/vnc.html?autoconnect=1&resize=scale> |
+
+`docker/run.sh shell` starts the virtual desktop and drops you into a bash shell (ROS sourced) instead of launching the stack, which is handy for running a single node or `ros2 topic echo`. Stop everything with `Ctrl+C` in the terminal that runs `docker/run.sh` (or close the MuJoCo viewer); closing the Tk console leaves the sim and the browser UI running. Both ports are published on `127.0.0.1` only, because the noVNC desktop has no password.
+
+Rendering is software OpenGL (Mesa llvmpipe), so the real-time factor depends on your CPU; the browser UI and `/nandi/game_status` report it as `rtf`.
+
+### World Configuration (`NANDI_*`)
+
+The world is built once per process by `atharv_nandi/core/farm_scene.py` from these environment variables (every node in the container sees the same values, so all of them agree on the model layout):
+
+| Variable | Values | Default | Effect |
+| --- | --- | --- | --- |
+| `NANDI_WORLD` | `legacy`, `orchard_lite`, `orchard_demo`, `orchard_demo_monsoon` | `legacy` | Selects the composed world from `config/fields/<world>.json` (WP4 field registry). `legacy` is unchanged; the orchard worlds add the heightfield, fixtures, actors and lighting below. Part of `world_id` |
+| `NANDI_NOVNC` | `0` / `false` / `no` / `off` = no noVNC desktop | unset (= up unless `NANDI_FIELD_MODE` is `1` / `true` / `yes` / `on`) | `docker/start.sh` skips x11vnc / websockify for these exact values (case-sensitive) and exports its decision as `NANDI_NOVNC_UP=0/1`. Privacy lock-out (MVP-SPEC 5.4): while noVNC is up, person actors are left out of orchard worlds (animals stay); the sim reads `NANDI_NOVNC_UP`, else applies start.sh's exact rule. `docker/run.sh` forwards `NANDI_WORLD`, `NANDI_NOVNC` and `NANDI_ACTORS` |
+| `NANDI_ACTORS` | `0` / `1` | auto | `0`: no actors. `1`: person actors required; the build is refused (`ActorPolicyError`) while noVNC is up |
+| `NANDI_CROPS` | integer ≥ 1 | `6` | Number of crops (`crop_item_1` … `crop_item_N`), scattered in two loose rows ahead of the robot |
+| `NANDI_TERRAIN` | `flat`, `ridges`, `rough`, `orchard` | `rough` | `flat` removes the two soil ridges; `rough` adds the ridges plus a patch of low clods further out; `orchard` is a scene-only orchard: two tree rows (5 m apart, trees every 2.5 m, trunk placeholders r 0.10 m × 1.0 m), circular basins r 1.0-1.5 m with 0.10-0.15 m bunds (circular-cap profile, 30° edge slope, half width h(1+cos30°)/sin30°: 0.37 / 0.56 m), 16 mm drip laterals along the rows, 3° cross-slope (spacings ASSUMED / cited in `farm_scene.py`) |
+| `NANDI_SEED` | integer | `7` | Seed for the crop scatter, clod placement and orchard basin radii / bund heights |
+| `NANDI_DT` | `0.002`-`0.004` | MJCF `0.002` | Physics timestep override; `0.004` only for standing / stop-and-shoot scans, not walking or RL (MEASURED 10 kg walk at 0.004: 1-5 calf-floor ticks, up to 10.2 mm foot penetration; 0 ticks at 0.002) |
+| `NANDI_PAYLOAD_KG` | kg | off | Welded basket payload mock (0.30 × 0.20 × 0.06 m box at site `basket_payload`, no collision) |
+| `NANDI_MAST_H` / `NANDI_MAST_HEAD_KG` | m / kg | off / `1.5` | Welded 360-camera mast mock at site `mast_base` (tube 1.0 kg/m ASSUMED + head with site `mast_head_ring`; sensors `mast_base_f` / `mast_base_t`) |
+| `NANDI_BUND_H` | m | seeded | Orchard only: one bund height for every basin |
+| `NANDI_WIND` / `NANDI_WEATHER` / `NANDI_GNSS` / `NANDI_LINK` | JSON text or a JSON file path | calm / November 09:00 dry / FLOAT then FIXED / 0.5 s and 5 s | WP7 platform scripts (wind and gusts, weather stub, GNSS dropouts, link timeouts), read by `atharv_nandi/sim/hooks/platform.py`; see "Platform" below |
+| `NANDI_ENERGY_CARD` / `NANDI_IMU_NOISE` | path / `0`, `1` | none / `1` | Last run card that seeds the route-energy coefficients; `0` publishes ideal IMU values |
+| `NANDI_RECOVERY` | `1` / `on` | off | WP28 recovery hook acts (crown stow, tools open, beacon, link ack) instead of observe-only; `RecoveryRunner` or `{"arm": true}` on `/nandi/recovery/cmd` arm it too |
+| `NANDI_SEASON` | `demo_all_fruiting`, `panicle`, `fruit_set`, `bagged`, `mature`, `post_harvest` | `demo_all_fruiting` | Orchard worlds (WP23): tree season (fruit, bags, panicles, active symptom decals). Overrides the field's `season`. Part of `world_id` |
+| `NANDI_TREES_CONFIG` / `NANDI_CROPS_CONFIG` | directory | `config/trees` / `config/crops` | Orchard worlds (WP23): tree-generator and crop-profile directories (a new crop is two yaml files). Part of `world_id` |
+| `NANDI_TOOLS` | `auto`, `on`, `off` | `auto` | WP2 tools T2 CLIPPER / T4 TWIST / T5 PRUNER in the rack (+ 4 debris mocap bodies): `auto` = the orchard worlds; `on` adds them to any world (nu 25 → 31). Part of `world_id` |
+| `NANDI_CUT` | `logical`, `physics`, `resist` | `logical` | WP2 cut rule trap window 6 mm (`logical`) or 4 mm; `resist` also loads the blade with F_cut × lever while the stem is between the blades |
+| `NANDI_TOOL_MOUNT` | `rack`, `rigid:T2`, `rigid:T4`, `rigid:T5` | `rack` | WP2 rigid build (MVP-SPEC 2.3, baseline tests and RL): only that tool, on the flange from compile (grip weld on, no rack, the other tools not built: nu 27, nv 135), change requests refused `rigid_mount`; implies `NANDI_TOOLS` in any world. Part of `world_id` |
+
+None of the mocks adds a joint: `nq`, the qpos layout and `crop_item_1` at `qpos[32]` are unchanged.
+
+**Orchard worlds (WP4).** `config/fields/<world>.json` (`atharv_nandi/sim/world/field_spec.py`, schema `nandi.field/1`) is the tree registry of MISSION-PRESETS 0.1 (tree id, physical tag, block, row, crop, cultivar, form, geometry incl. graft union and `alley_clear_height_m`, drip-line offset, rope lines, props, fruit-set / bagging dates, banana ribbon) plus terrain, fixtures, actors, lighting and scripted events. `orchard_demo`: isolated mango OT-1 and rows R1 4 mango (NHB 5 × 2.5 m, frozen; 5 × 3 m is the alternative) / R2 4 guava / R3 4 papaya / R4 4 banana at the WP0c positions; `orchard_lite` (CI): a 3 × 2 m mango hedgerow pair + one tree per species; `orchard_demo_monsoon`: flooded basins, ground friction 0.4, 3 mud patches, rain. Terrain is one heightfield (`atharv_nandi/sim/world/terrain_orchard.py`, 0.05 m cells): trunk basins 0.10 m deep, a 0.10 × 0.3 m bund, flat R1 alleys (≤ 1°), a 5° headland strip (stowed crossing) and a 10° patch at the R4 end (crown refusal), whose side and fall faces are never steeper than the nominal slope, a mud patch (friction 0.3) and a soft-soil sink (3-5 cm foot penetration) near home. Fixtures: drip laterals on every tree line with a foot-on-lateral counter, plastic mulch (friction 0.5) in R3/R4, a 1.4 m prop rope B-1↔B-2 and a bamboo prop under B-3 (ropes and laterals are query geoms in group 5, invisible to safety rays), dock plate, an open crate. Actors are contype-0 mocap bodies: worker, child, crouching and lying people, a ladder picker, a pole picker, dog, monkey, cattle and nilgai, scripted by waypoints and triggers. Lighting presets morning / noon / overcast / dusk / dawn (+ fog, drawn in the camera and driver renders via `lighting.sync_renderer`). The 50 Hz hook `atharv_nandi/sim/hooks/world_events.py` runs the scripts, publishes `/nandi/world/state` and `/nandi/world/events`, takes `/nandi/world/cmd` (every message of a 20 ms tick, in order; overflow of the 32-message bus window gives `cmd_lost`; types checked: a malformed command is answered with `cmd_refused` and never faults the hook; field `events[]` are validated at load) and hands wind / rain events, stamped with their fire time, to the WP7 platform hook. The WP23 `trees` module replaces the placeholder trunks and canopies (they return only if that module is absent); the browser does not draw the heightfield yet (WP10 change request).
+
+**Composition and plug-ins (WP0).** `farm_scene` builds the world with `atharv_nandi/sim/world/compose.py`: the robot MJCF, then the built-in modules `robot` (order 0: timestep, payload and mast mocks), `legacy_crops` (10) and `legacy_terrain` (40), then every `atharv_nandi/sim/world/modules/<name>.py` in ORDER (tools 30, terrain and fixtures 40, trees 50, fruit pool 55, actors 70, dock 80), then a generated home keyframe. The legacy world compiles byte-identical to the pre-WP0 builder. Every index comes from a name lookup in `atharv_nandi/core/model_layout.py`, which also refuses a model that moves the frozen robot prefix (qpos `[0:32]`, actuators `0..24`, legacy crops contiguous from qpos 32). Per-step behaviour plugs in as `atharv_nandi/sim/hooks/<name>.py` (rate hooks after each step, `every_step` substep hooks before it). Hooks drive only appended actuators (index ≥ 25), read the safe hold from `bus.values["hold"]`, and a hook that raises is disabled and safe-holds the robot (reason `hook_fault`) instead of stopping the sim. Model-field state providers (`sim_state.register_provider`) live in a world module or hook file and are found by `sim_state.discover_providers()` in every process. `world_id = sha1(world, seed, module versions, tree registry hash)[:12]` tags `/nandi/sim_state`.
+
+**Orchard trees, fruit pool and crop profiles (WP23).** `NANDI_WORLD=orchard_lite` (WP4's L1-1/L1-2 3 × 2 m mango hedgerow pair and L2-1..L2-4 one tree per crop, plus one tree per extra configured crop) or `orchard_demo` (the 17 WP0c candidate trees: OT-1, R1 mango 5 × 2.5 m, R2 guava, R3 papaya, R4 banana) adds one static, joint-free body per tree (`atharv_nandi/sim/world/modules/trees.py`, order 50) generated by `atharv_nandi/sim/world/trees.py` from `config/trees/<species>.yaml` and `config/crops/<crop>.yaml`: keep wood (group 0, contype 1 / conaffinity 0), non-colliding prune candidates (sprouts below the graft union, skirt shoots, water shoots, dead twigs, banana dead blades, suckers), one merged foliage mesh (group 3), ≤ 12 leaf quads with `<tree>_leaf_k_<k>` sites, symptom decals (group 4), static fruit, bags, the banana bunch with its ribbon, and a query-only foliage envelope (group 5). Every WP0c frozen fruit, prune and leaf point is reproduced exactly; render geoms per tree are 11-55 (budget 70). The registry is WP4's `config/fields/<world>.json` `trees[]`; WP0c trees inherit their frozen wood / targets / leaves from `config/fields/orchard_candidates.json` and the WP23 demo facts (decals, drooping leaf, crowded papaya). The fruit pool (`atharv_nandi/sim/world/modules/fruit_pool.py`, order 55) adds 10 fixed slots (0-4 `connect` for mango, 5-9 `weld` for guava and papaya; 60 DOF whatever the orchard size, nv 151 with the robot, legacy crops and WP2 tools), and `atharv_nandi/core/fruit_pool.py` assigns, releases (logical cut / twist) and recycles them, with `cut_k` and the pedicel on the fruit body and the `pool` and `hidden_geoms` sim-state providers. An assigned slot gets the fruit's own mass matrix (`dof_M0`: the slots are MuJoCo simple bodies), so a released 1.5 kg papaya falls at g, not at the 0.15 kg template's 100 m/s². Papaya truth has no interpenetrating fruit and a `clearance_mm` from the open T4 jaw to the trunk and neighbours (on P-1 = R3-1 the lowest ripe papaya passes, the second is MARKed `no_clearance`). Crop profiles carry the stage model (mango never uses skin colour; the validator refuses any skin or bare colour cue for mango), harvest method, `pedicel_leave_cm` (mango 2.0), `tau_detach` (guava 0.15, papaya 0.3 N·m from the sweep `python3 -m atharv_nandi.core.fruit_pool --sweep`), prune capacity and paste rule, banana leaf floor, symptom classes and UP calendar windows. The browser console draws groups 0-4 (wood, fruit and bunch, foliage meshes, decals, laterals and ropes; WP10).
+
+**Transfers, desap tray, papaya cradle and unload (WP3).** A harvested pool fruit (equality off after the clip or twist) is moved **kinematically** (assisted register `kinematic_transfer`) from the catcher at the PARK TCP (fruit CoM within 0.25 m of `tcp_range`, else `not_at_catcher`), one item at a time and only with the arm at PARK and the gait stopped, by `atharv_nandi/core/tools/kinematic_transfer.py` and the hooks in `atharv_nandi/sim/hooks/transfer.py`: mango and guava go **stalk-down, one per cell** into the 8-cell desap tray, a papaya **lies along x** in the rear cradle (one per trip). Path: lift above the highest tray fruit / gantry rail, carry at 0.45 m/s, lower at 0.30 m/s (papaya ≤ 0.5). Seated fruit ride their cells (pose and velocity from the trunk, contact-free, gravity cancelled) and their mass goes into WP1's `ballast` body (delivered sum, cap 3 kg; reset restores it). DOCK/UNLOAD: robot parked alongside the crate (worst crate spot ≤ 0.78 m from the arm axis), cell by cell then the cradle, each item lowered to 8 mm above its planned crate floor spot and let go; impact speed and rest pose are measured, CoM in the crate AABB → `delivered` with per-tree count and kg, else `dropped`. E-stop freezes the item in the air until `resume`; arm off PARK or gait moving pauses it until both hold again. The unload also needs the crown stowed (WP24 extension ≤ 20 mm, the WP13 threshold, else `crown_gate`, MISSION-PRESETS 9); while it runs the WP24 mast refuses raises, and a crown up anyway pauses it `crown_gate` until stowed. Fruit-on-fruit contacts in the tray are a truth geom-distance check. Commands on `/nandi/transfer/cmd` (`place`, `unload`, `pause`, `resume`, `abort`, `release_slots`; newest message per 20 ms tick wins, so send one and wait for its `cmd` event or send a JSON list as a batch; a replaced message gives `cmd_lost`), state on `/nandi/transfer/state`, events on `/nandi/transfer/events`, sim-state provider `transfer` (incl. the pool slots' `dof_M0`); task layers use `hooks.transfer.controller_for(m)`. Measured on orchard_demo with the OS 1.2 load (3 mango, 3 guava, 1 papaya, 2.99 kg): 7/7 in the crate, impact 0.39 m/s (papaya 0.39), 0 fruit-on-fruit contacts (min gap 20.8 mm), 1.7-2.0 s sim per placement from the catcher, 3.7 s sim per unloaded item, riders within 0.03 mm over a 0.44 m walk, +19 µs per physics step with 7 riders. Known limits: the WP1 papaya cradle lane is too narrow for a 140 mm papaya (the seated papaya overlaps the gantry rail by 26 mm, visual only), and WP23's pool does not update the mass matrix (`dof_M0`) on assign, so WP3 corrects it for the items it releases (change requests in the contract). Tests: `tests/test_transfer.py`.
+
+**Orchard tools (WP2).** In the orchard worlds `atharv_nandi/sim/world/modules/tools.py` (order 30) attaches the three tools from `atharv_nandi/sim/models/AtharvNandi/tools/` into the WP1 rack (`cradle_T2/T4/T5`): **T2 CLIPPER** (cut-and-hold scissor, `clipper_roll` ±90°, `clipper_blade` 80 N at the 0.05 m lever, mango pedicel and guava stalk clip), **T4 TWIST** (cradle jaws 0-0.16 m, `twist_roll` ±270°, papaya and guava twist) and **T5 PRUNER** (bypass pruner, ≤ 12 mm green wood, sprouts, skirt and dead twigs, banana dead blades); each is a free body with 2 joints (nv 151, actuators 25-30 by name, 0.93 kg on the rack, ASSUMED masses). A racked tool is welded to the trunk and collides with nothing; the rack swap (`atharv_nandi/core/tools/tool_changer.py`, MVP-SPEC 2.3) docks tool-down at the WP0c frozen poses, checks the hand-tool pose against the design relpose (≤ 2 mm / 2°, a 4 mm offset is refused), locks it with the nominal pose (weld residual < 1 mm), and takes 4.4-4.6 s per tool (MEASURED, capped runner); it is refused while a fruit is held (catcher, T4 pads or the T1 picker fingers), e-stopped, with the crown up, a low CoM margin or a person in the WORK field, and a running swap faults (arm frozen for e-stop / person) when any of these but holding appears mid-swap; the WP24 mast refuses raises while a swap runs. `{"ack_fault": true}` and `{"release": true}` on `/nandi/tool/change` clear a swap fault and release a caught fruit; malformed change messages are refused `bad_request`. The 50 Hz hook `atharv_nandi/sim/hooks/tools.py` runs the swap, the tool actuators (a blade / jaw close needs a target within 0.15 m of the TCP, no person in the WORK field and stability OK; nothing cuts or releases while e-stopped), the MVP-SPEC 3.4 cut rule (nominal closure, capacity, 6 mm trap window, stem angle < 30°; the pool fruit is released and caught, the pedicel error is reported: 0.02 mm at 1, 2 and 5 cm with a closed-loop TCP alignment, 2.5 mm open loop), the prune cut (> 12 mm is refused with `paste_required`, a cut shoot is hidden and drops as a debris body) and the OS 3.4 twist release (pedicel-axis moment above `tau_detach` for 3 ticks AND ≥ 30° of tool roll: a hanging papaya or a closed jaw without roll never releases). Topics `/nandi/tool/change`, `/nandi/tool/actuate`, `/nandi/tool/state`, `/nandi/tool/event`; the swap's arm targets go out on `/nandi/tool/arm_targets` for the arm owner (the live forwarding to `/nandi/arm_targets` and the console buttons are WP8 / WP10 change requests), and `hooks.tools.install(driver)` runs everything in `SimDriver`. Tool sensors (OS 2.4) in `/nandi/tool/state` `sensors`: blade jointpos `clipper_blade_pos` / `pruner_blade_pos`, roll jointpos `twist_roll_pos`, the T4 pad touches, and the T2 TCP rangefinder `clipper_tcp_range` (a 50 Hz ray from site `clipper_range` along the tool axis while T2 is mounted; as an MJCF sensor it cost 6.4 µs every physics step). `NANDI_TOOL_MOUNT=rigid:<tool>` builds one tool already mounted (MVP-SPEC 2.3 rigid build, held by its grip weld because design rule 1 keeps tool joints out of the robot tree). Code that teleports the robot in a world with tools calls `world.modules.tools.seat_tools(m, d)`. The T4 jaw centre is 0.25 m from the wrist (WP0c assumed 0.20: re-run requested).
+
+**Recovery behaviours (WP28).** `atharv_nandi/sim/hooks/recovery.py` (50 Hz) runs the MISSION-PRESETS 8 RECOVERY family from `atharv_nandi/core/recovery_behaviours.py` (pure logic, one behaviour at a time, priority FALLEN > E-STOP RECOVERY > LOCAL LINK > CLOUD LINK > RETURN HOME > STUCK > SAFE PARK). It reads the WP7 links, pose estimate, RTK state and reserve monitor, the WP24 mast, the WP6 inhibits / fields / stability and the WP2 tool state. It acts through WP24 `recovery` requests (crown stow), `/nandi/tool/actuate {"open": true}`, the WP1 beacon request and the WP7 link ack. **Local safety link lost** (heartbeat > 0.5 s): stop, tools safe, ordered crown retract, stand, hold with motion locked until the link is back and the operator answers "Resume / Halt" (Halt keeps it parked and locked, queue paused, until a later Resume; so does Halt on a console-link or SAFE PARK hold). **Console link lost** (5 s, local link up): queue paused, no new targets, SAFE PARK at the nearest alley edge or headland within 3 m, hold. **RETURN HOME** (low SoC or operator): crown stow, then a clear route over the registry map (A*), RTK FIXED / FLOAT at 0.18 m/s on the pose estimate, odometry only at 0.10 m/s with row-following against registry trunks; a stall on the way home ends in assist (locked) instead of the 600 s timeout, and an operator abort of a low-SoC return is not restarted until the reserve monitor clears. **STUCK / SINK** (progress < 2 cm in 5 s along the command, or feet sunk > 5 cm): crown stowed first, back up 0.2 m, retry with step height x 1.5, then +30° heading, then assist. **E-STOP RECOVERY**: local confirm (only on `/nandi/recovery/local`, the handheld / dock local-link transport, bound to the paired WP1 handheld), then operator confirm (only on the console topic), then the checklist, re-arm, crown retract, resume from the last completed tree. **FALLEN** (> 35° for 0.3 s): power off and the manual checklist; once complete, no new FALLEN while people handle it in the latched fall hold (until the supervisor resets the hold, or it tips over again). Self-righting is a measurement spike only: `tools/self_right_spike.py`, self-right-spike. The hook is **observe-only unless armed** (`NANDI_RECOVERY=1`, `{"arm": true}` on `/nandi/recovery/cmd`, or `RecoveryRunner`), so other packages' tests are unchanged (byte-neutral, test). Commands on `/nandi/recovery/cmd` (`arm`, `run`, `confirm: operator`, `ack`, `check`, `abort`; a disarm is refused while a behaviour holds the robot) and `/nandi/recovery/local` (`confirm: local`, local `ack`); state on `/nandi/recovery/state`, alerts on `/nandi/recovery/alert`. Gait motion is applied in-process by `RecoveryRunner` on `SimDriver`; the live `locomotion_service` does not honour `motion_inhibit.recovery` / `/nandi/recovery/motion` yet (change request). MEASURED on orchard_demo with the real gait: local-link loss crown-up while walking: stopped 1.50 s, tools safe 0.46 s, crown stowed 8.36 s after the loss, 0.4 mm drift while disconnected. Cloud loss: 0.86 m to the alley edge, 0 new targets. Low-SoC RETURN HOME on RTK FLOAT: 0.165 m from home; on odometry: 0.054 m. Stuck on a root line in the mud / sink patch: 5/5 and 5/5 recovered over 5 seeds, all on rung 1 (a test fixture; WP4's patches alone never stall the gait); a 10 cm root line no step clears runs the full ladder (rung 1, rung 2 at +30°, assist) on 3/3 seeds (max tilt 33.7°; a 15 cm line tipped the robot over on rung 2 and FALLEN took over). Tests: `tests/test_recovery_behaviours.py`.
+
+**Dock, time-compressed charge and hub sync stub (WP13).** `atharv_nandi/core/dock_logic.py` runs DOCK/UNLOAD (MISSION-PRESETS 9) as a SimDriver task (`DockRunner`): park alongside the crate (crate centre 0.53 m to the right, 3 cm / 3°), WP3 unload with per-tree count and kg, job sheets (WP9 callback, `pending_wp9` until WP9 lands), dock, charge, sync. **Docking** backs straight onto WP4's plate (the backboard is behind it): walk to the staging point 0.95 m in front, turn to the dock heading, strafe out the lateral offset there, then creep in with the heading held and stop early by the MEASURED gait coast. Strafes only run with the trunk at least 0.85 m out (plate half-length + 0.35 m foot reach), so no foot is on the plate (MP 9.1). A lateral error found nearer walks straight out first. Success is < 3 cm and < 5° (O-20). Misaligned, or out of the entry cone (4.5 cm / 6°), means back straight out (at least 0.3 m) to the staging point, re-align there and retry; after 2 retries the session goes to assist `dock_failed`. Crown up is refused (`crown_gate`). A crown raised mid-dock stops the gait until it is stowed (assist `crown_gate` after 30 s). A missing mast reading counts as raised. More than 4 m from the staging point is refused (`too_far`: RETURN HOME first). No progress for 8 s gives `stuck`. An e-stop freezes the sequence. MEASURED on the capped runner after the review fixes: 33 of 35 random starts 1-3 m out (orchard_demo and orchard_lite) docked, 32 first time, 0.44-2.37 cm, yaw ≤ 0.52°, 22-35 s sim, no strafe with a foot on the plate. The other 2 got `stuck_approach`, and the pre-fix code does the same in that sweep (details in the contract). Re-run the sweep with `python3 -m atharv_nandi.core.dock_logic --sweep N --world W --seed S` (inside the container). **Charge** (ASSUMED): CC 10 A to 90 % SoC, then a CV taper to 1 A, at ×240 time compression (`NANDI_DOCK_CHARGE_X`, a finite number from 1 to 1e5, else a `ValueError` at session build), added to the WP7 platform battery. 0.22 → 0.99 takes about 28 s sim (113 real minutes). For the whole session, e-stops included, the runner holds a `/nandi/platform/plan` so the WP7 instant "parked at home" fill stays off. Afterwards it sends back the platform's previous plan, and keeps the reserve latch unless the pack is full. A session that ends in assist within WP7's 0.15 m home radius (charge fault, `dock_failed`, unload refusal) keeps holding the plan until the robot leaves that radius or the operator acknowledges (`DockRunner.acknowledge()`), so the battery does not jump to full next to a charge fault. While charging, more than 4.5 cm / 7.5° off the plate (a contact band wider than the 3 cm / 5° entry gate) for 2 s, or not full in time, gives a charge fault (`charge_contact_lost` / `charge_timeout`): sync still closes the manifest, then assist. A WP3 unload interlock refusal is retried at most every 0.5 s, not at all during an e-stop or hold, and goes to assist with that reason after 30 s (an arm that never parks). Items in the tray with no crate park pose give an `unload_skipped` event (`no_crate_park`) instead of a silent skip. **Hub sync stub**: closes the run manifest (`manifest.json`, `final`, Merkle root), marks L1 sent by the stub and L2 / L3 queued, and allows local deletion only after a hub receipt with the same root (delete-after-receipt rule). The sim never deletes. `auto_low_soc` starts the whole sequence on the WP7 low-battery return. State on `/nandi/dock/state` (2 Hz) and `/nandi/dock/events`; world aids from `atharv_nandi/sim/world/modules/dock.py` (module `dock_target`, order 81: sites `dock_target` / `dock_staging`, painted lane, tag and pad decals, no collision). Not yet in the live `sim_runner` or the browser tile (change requests to WP27 / WP9 / WP10). The slow test runs the full sequence with a low-battery inject in 100.8 s sim and 12.7 s wall. Tests: `tests/test_dock.py`.
+
+**Task planners per crop (WP8).** `atharv_nandi/core/tasks/` turns a tree's WP23 truth and its crop profile into contact jobs and MARKs, and runs them as tick-driven state machines: **mango one round** (every mature in-band fruit clipped with T2: roll the blade hinge along the pedicel, trap, cut at `pedicel_leave_cm` 2.0, catch, retreat, park, stalk-down into its own tray cell; mature fruit above 0.8 m are MARKed `out_of_reach_marked` / `pole_picker`; bagged fruit are refused), **guava** clip (default) or twist, **papaya** twist with T4, one per trip, only with `jaw_clearance` (else MARK `no_clearance`), into the rear cradle at ≤ 0.5 m/s, **prune jobs** with T5 (rootstock sprouts, skirt lift, dead twigs, malformed panicles, water shoots, tip-back; > 12 mm → MARK `over_capacity` with `diameter_mm` and the `paste_required` flag, out of band → MARK `out_of_reach_marked`; keep wood never cut) and the **banana** tidy (dead blades in the band only, never a green leaf) plus bunch / de-leaf / de-sucker MARKs (`nandi.mark/1`, published on `/nandi/mark`). Retries follow MISSION-PRESETS 0.4 (`atharv_nandi/core/task_retry.py`): re-trap ±10°, re-grip, twist both ways up to 540° then MARK `twist_failed` and ask the operator (assist: Take over, Skip, Halt; `grip_failed` / `base_moved` assist once their retries are spent), retry / skip with a reason / halt the tree when > 50 % are skipped; an e-stop latches; a person in the WORK field stops the arm everywhere (the OMPL transit is aborted, the park / carry / lower freeze in place) and, before the commit point, the target is re-planned from the pre-pose once the field clears; a base drift > 2 cm before the commit point pauses the arm, re-references and re-plans; a stability loss (`bus.values["stability"]`, or the WP2 close gate refusing for stability) backs out and skips `stability`; a T4 slip lowers the fruit to 0.2 m above the ground before the jaws open; an executor timeout (90 s) opens the tool (or places a caught fruit), parks and reports `failed` / `timeout`. `atharv_nandi/core/tasks/sim_executor.py` runs them headless on `SimDriver` with the WP2 tools, the WP3 transfer and the WPCAP OMPL planner (transits and parks with the mounted tool and the held fruit carried by the wrist), a 50 Hz TCP servo on the tracked target and gravity feed-forward with the tool and fruit at their own CoMs; `arm_ik_solver.py` adds the tool-aware TCP (T2 0.20, T4 0.25, T5 0.21 m), the mast keep-out at trunk x −0.30 and the shoulder-torque / predicted-CoM prechecks. The harvest node forwards the WP2 swap arm targets (mode `tool_change`, its own IK solver for the feed-forward) and refuses `/nandi/auto_harvest` while a swap runs; the legacy auto-harvest is otherwise unchanged. Measured on the capped runner, orchard_demo, seed 7, assisted (truth target and base pose, stations teleported): mango 6/6 (pedicel error ≤ 0.38 mm), guava clip 6/6, guava twist 5/5, papaya at 1.8 kg 5/5 (shoulder torque ≤ 12.6 N·m, carry ≤ 0.42 m/s), prune 5/5 with 0 keep-wood cuts, banana tidy 4/4 with 0 green cuts, 10-23 s wall per station. Not yet live: no console tile or ROS entry point runs a tree task (change request WP9 / WP10 / WP27). Tests: `tests/test_tasks_unit.py`, `tests/test_harvest_node_tool_change.py`, `tests/test_tree_stations.py` and `tests/test_task_interlocks.py` (`slow`).
+
+**WORK assist: tote, lead-to-marks, tag follow-me, spray disabled (WP29).** `atharv_nandi/core/work_assist.py` (pure logic) and the 20 Hz hook `atharv_nandi/sim/hooks/follow_tag.py` (simulated UWB tag + controller) run MISSION-PRESETS 7 with the crown stowed. **Tote** (`tote_carry`): a lidded sample / tool tote of at most 3 kg (`payload_full` above; crates are Phase D) to a tree stop, the dock, the tag holder or a point, arrival ≤ 0.5 m, `ack` to unload, optional return; reports kg, Wh and kg/Wh. **Lead-to-marks** (`lead_to_marks`): walks ahead of a scout or pruner to every MARKed tree of the job sheet (`params.marks` or the `/nandi/mark` records), stops 1.5 m from the trunk, shows the job sheet lines and waits for `next` (or `auto_next_s`); routes go round the headland, never through a row; it stops for anyone in a WP6 field except the follower in the rear warning field. **Follow-me** (`follow_me`): follows an adult worker wearing an issued tag (`/nandi/work/tag/cmd` `issue`, adult only, pseudonymous id rotated per shift) at 1.5-3 m, ≤ 0.18 m/s; no fix for 0.5 s stops it, more than 2 s latches `tag_lost` (operator `resume` with the tag back); any return in a field that is not the tag holder stops it (`person_hold`; only a warning-field return within 0.45 m of the tag counts as the holder, a protective-field return never does). Fail closed: missing or stale WP6 field returns (`fields_unavailable`), a non-finite or out-of-range tag reading (treated as no reading) and a malformed command (`bad_command`, e.g. `params.marks` not a list of MarkRecords, `return: "false"`) stop or refuse WORK and never fault the hook; tags go to person bodies only. **Spot spray** is refused `not_in_mvp`. Commands on `/nandi/work/cmd`, state on `/nandi/work/state` (2 Hz), events on `/nandi/work/events`, drive on `/nandi/work/drive` (SimDriver: `work_assist.driver_task`). The holder's track stays in device memory (at most 7 days, and at most the newest 200,000 fixes, about 5.6 h at 10 Hz; purged every tick); no published payload or uplink record carries a coordinate or the tag id. MEASURED (real gait, capped runner): lead 4 / 4 MARKs on `orchard_lite` (settled stop error ≤ 0.060 m) and 5 / 5 on `orchard_demo` (≤ 0.050 m); tote 2.5 kg arrival 0.059 m; `tag_lost` latched 2.00 s after the last fix; untagged adult → stop within 0.6 s. **Known limit:** today WP6 sees the tag holder as an obstacle, so its 2.5 m front warning field slows the robot to 30 % and the follow gap settles at about 2.9-3.0 m (85 % of samples in band); with the holder exempt (change request to WP6, hint `bus.values["work_tag_holder"]`) it holds 2.12-2.24 m. Not yet drivable from the browser: the `/nandi/work/drive` → `/nandi/cmd_vel` relay and the WORK tile are change requests (WP27 / WP10). Tests: `tests/test_work_assist.py`.
+
+`docker/run.sh` and `docker/run_rl.sh` pass them into the container when they are set, for example:
+
+```bash
+NANDI_CROPS=10 NANDI_TERRAIN=flat docker/run.sh
+```
+
+The web console listens on `NANDI_WEB_PORT` (default `8080`) inside the container.
+
+### Operator Console: Access, E-STOP, Offline
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `NANDI_OPERATOR_TOKEN` | unset | Token for the **operator** role (drive, services, arm, gait, envelope, missions, E-STOP and E-STOP reset). 8–512 characters (16–512 with `NANDI_FIELD_MODE=1`). |
+| `NANDI_VIEWER_TOKEN` | unset | Token for the **viewer** role: receives the state stream only; every command is refused with an error, except **E-STOP**, which any authenticated role may press. |
+| `NANDI_FIELD_MODE` | `0` | `1`: tokens are mandatory (the bridge exits with status 2 if `NANDI_OPERATOR_TOKEN` is unset) and `docker/start.sh` does not start x11vnc/noVNC. |
+| `NANDI_VNC_PASSWORD` | unset | x11vnc asks for this password (`-rfbauth`) instead of running with `-nopw`. |
+| `NANDI_SIM_LOCAL_LINK` | `1` (always off in field mode) | The bridge beats `/nandi/link/local/heartbeat` at 10 Hz as a **sim stand-in for the WP1 handheld** (amber "sim handheld" chip), so the WP27 Ready check sees a local safety link in the sim. Not a safety link; never on in field mode: an explicit `1` is ignored there (logged). |
+| `NANDI_AUDIT_LOG` | `runs/console_audit.jsonl` | Every accepted console command is appended as `{t, client, role, type, name, values}` (`values` = the walk vector, arm/gait vector, zone or envelope flag). Only an identical repeat from one client within 1 s, such as the 5 Hz held-walk refresh, is collapsed; every E-STOP is logged. |
+| `NANDI_ESTOP_STATE` | `runs/console_estop.json` | The console E-STOP latch is saved here, so a bridge restart (crash, `pkill -f "atharv_nandi.nodes web_bridge"` or, installed, `pkill -f "lib/atharv_nandi/web_bridge"`, the launcher's restart loop) comes back **latched**. An unreadable file also latches; only **Reset E-STOP** clears it. |
+| `NANDI_MISSIONS_DIR` | `config/missions` | Where **Start zone A** looks for `zone_a.geojson` (or any `*.geojson` whose properties name the zone). |
+
+With no tokens set (and no field mode) the console behaves as before: everyone who can reach the port can drive, and the page shows a **DEV: no auth** badge. With tokens, open `http://localhost:8080/?token=...` once (the token moves into session storage and leaves the address bar) or enter it in the prompt; the browser sends `{"type": "auth", "token": ...}` as its first WebSocket message, a client may also pass `/ws?token=...` on the handshake. A connection that has not authenticated within 5 s, or that sends 3 wrong tokens, is closed (WebSocket code 1008); after 10 failed authentications in 60 s from one address, new handshakes from it get HTTP 429. Events (E-STOP results, envelopes) go to authenticated clients only. Tokens are compared with `hmac.compare_digest`. `docker/run.sh` passes all of these variables through when they are set.
+
+**E-STOP** (the large red button, bottom right, always visible; `Space`; works on touch on `pointerdown`) latches the console, stops the gait (`/nandi/stop_motion`), aborts any mission (`/nandi/mission/abort`) and calls `/nandi/estop` on the safety supervisor. If that service is not running yet, the console latch still refuses walking, manual-arm, auto-harvest and mission-start commands and a running harvest is aborted with `/nandi/release_arm`. **Reset E-STOP** asks for confirmation and calls `/nandi/estop_reset` (or only clears the console latch when no supervisor is running); an E-STOP pressed while a reset is in flight wins, and the reset reports failure. The red banner at the top shows the latch with the supervisor's reason and stop time / distance when `/nandi/safety_status` provides them.
+
+The console works without internet access: Three.js r160 (`three.module.js` and the only addon used, `OrbitControls.js`) is vendored under `atharv_nandi/web/vendor/three/` with checksums in `atharv_nandi/web/vendor/SHA256SUMS` (`tests/test_vendor_assets.py` checks them and that no page or script references an off-site URL). The panels for mission, battery, camera, detections, node health and run KPIs show `n/a` until the corresponding package publishes (see Console Inputs below). Labels can be switched between English and Hindi (`हि` / `EN` button); the Hindi strings are machine-drafted and need native review. The layout is usable on a 390×844 phone screen (controls collapse behind **Controls**).
+
+---
+
+## Driving the Robot
+
+### Keyboard (browser UI <http://localhost:8080> and Tk console)
+
+| Key | Action |
+| --- | --- |
+| `W` / `↑` | Walk forward |
+| `S` / `↓` | Walk backward |
+| `A` / `D` | Strafe left / strafe right |
+| `Q` / `E` (`←` / `→` in the browser) | Turn left / turn right (in place) |
+| `Space` | Browser: **E-STOP** (latched; see Operator Console). Tk console: Stop (halt the gait, release the arm) |
+| `X` | Browser only: stop the gait and release the arm (the old `Space` action) |
+| `H` | Auto-harvest the nearest crop in reach |
+| `R` | Reset world (robot + crops back home, score cleared) |
+| `G` | Switch gait (Tripod ↔ RL Balance Policy, if a policy is loaded) |
+| `Esc` | Release the arm back to RL balance / rest (aborts a running harvest) |
+| `V` / `F` | Browser only: show/hide the work envelope / camera follows the robot |
+
+Holding a movement key walks continuously; a quick tap takes one gait cycle; releasing a key finishes the current gait cycle and stops. Keys can be combined (e.g. `W` + `Q` walks forward while turning left). The arrow keys are browser-only; in the Tk console click the panel first so it has keyboard focus. Held keys are dropped when the browser tab or the Tk window loses focus, and as a last safety net locomotion releases a hold by itself if no `cmd_vel` arrives for 0.5 s.
+
+### Tk Operator Console (noVNC desktop)
+
+The console in the virtual desktop has an **E-STOP** button pinned at the top (calls `/nandi/stop_motion` and `/nandi/estop`; if the safety supervisor is offline it also releases the arm) and a **Reset E-STOP** button with a confirmation dialog. It drives the same ROS interface: a status panel (position, score, falls, timer, RTF, arm mode/phase), a tap/hold D-pad (tap = one step, hold = walk), **STOP**, **Release Arm**, **Reset World**, **Switch Gait** with the four gait-parameter sliders, **Auto-Harvest**, **Compute Envelope** / **Show/Hide** for the 3D reachability wireframe, and manual sliders for the gantry, arm joints and gripper. Moving a manual slider takes the arm out of balance mode until the arm is released (**Release Arm**, `Esc`, or `/nandi/release_arm`). The browser UI offers the same controls plus a live Three.js view of the world.
+
+### Locomotion Modes
+
+* **Tripod Gait** (default, always available): deterministic alternating tripod gait in `atharv_nandi/core/tripod_gait.py`, tuned by the gait parameters below.
+* **RL Balance Policy**: 23-DOF PPO policy that drives the 18 leg joints and uses the dorsal arm as a counterweight. It needs a trained policy archive in `rl_training/models/` **and** the training image (`docker/run_rl.sh`), because the default runtime image does not include PyTorch. Without a policy the toggle answers `No RL policy loaded - using Tripod gait` and the robot stays on the tripod gait; `/nandi/locomotion_status` always reports the truth (`mode`, `policy_loaded`, `policy_path`).
+
+Gait parameters (`/nandi/gait_params`):
+
+| Index | Parameter | Range | Default |
+| --- | --- | --- | --- |
+| 0 | `speed_scale` | 0.2 – 1.5 | 1.0 |
+| 1 | `step_height_scale` | 0.5 – 2.0 | 1.0 |
+| 2 | `freq_hz` | 0.8 – 3.0 | 1.8 |
+| 3 | `balance_gain` | 0 – 2 | 1.0 |
+
+### Harvesting
+
+Walk until a crop is within **1.08 m** (horizontal distance to the trunk) and press **Auto-Harvest** (`H`). The UI stops the gait first; the harvest node then takes the arm out of balance mode, picks the nearest crop that is not already in the basket or under the robot's body (closed-form IK refined in the world frame, gripper pointing straight down), plans the whole vertical pick column (hover, grasp, lift, carry height) for one gantry position before moving, descends, closes the gripper, lifts it, checks the grasp, swings it over the left side of the basket, releases it, verifies it landed inside the basket footprint (the same rule the score uses), and always returns the arm to rest. Progress is published on `/nandi/harvest_status`.
+
+* **Grasp check** (live `/nandi/sim_qpos` only): after the lift the crop must have risen at least 5 cm, its centre must be within 4.5 cm of `gripper_tip` (between the finger pads), and 0.3 s later it must not have slipped more than 6 mm relative to the tip. One regrasp is attempted; before it the sequence waits for the released crop to stop rolling, and if a crop has moved more than 1 cm between planning and the hover the pick column is re-planned for where it lies now (twice at most, then `crop_item_k keeps moving (...), try again`). the failure reads e.g. `Grasp failed on crop_item_1 (2 attempts; last: rose 0.0 cm, 22.5 cm from the tip)`. While carrying, the crop is watched continuously; if it leaves the gripper the run stops with `Dropped crop_item_k while carrying it` (instead of releasing nothing over the basket and reporting `Drop missed`).
+* **Motion**: joint targets carry a gravity feed-forward (servo sag would otherwise leave the tip up to ~5 cm low at full reach), waits poll the live tip until the arm has stopped instead of sleeping fixed times (so a sim running below real time still works), and a Cartesian waypoint may miss by up to 1.5 cm (gravity-sag correction at the envelope edge) without aborting the run.
+
+* If nothing is within 1.08 m it reports the nearest crop and its distance, e.g. `No crop in reach (nearest crop_item_3 1.42 m)`, or `No crop in reach (all crops already in basket)`. A crop under the body is never attempted (the arm would have to pass through the trunk); if it is the nearest, the message ends in `under the body - back up`.
+* On level ground the arm picks crops up to about 0.77 m ahead of the trunk centre, 0.70 m ahead-diagonally and 0.46 m to the side (crops behind the trunk only diagonally). Those limits include the upper arm meeting its own gantry carriage (shoulder above ~1.69 rad, earlier at some yaws: every planned pose is also checked against the carriage at its actual yaw) and any arm-vs-robot contact (a crop tight against a leg or the trunk side cannot be picked from above). A crop inside 1.08 m but beyond that, or one the robot is tilted away from (e.g. front legs up on a ridge), is reported as `crop_item_k out of arm reach (X.XX m), move closer` before the arm moves; when the trunk is tilted 1.5 deg or more the report names it (`... (0.67 m; trunk tilted 4.2 deg, pitch +4.2 roll -0.0), level the robot or move closer`; about 2 deg of nose-up pitch already puts a ground crop 0.62 m ahead out of reach), and a crop under the body reads `... (0.26 m, under the body), back up`. Walk closer (or onto level ground) and press `H` again. `python3 tools/harvest_trials.py` (inside the sim image) prints the closed-loop pick map around the robot.
+* **Release Arm** (`Esc`), the Tk console's **STOP**, a manual arm slider move or **Reset World** aborts a running harvest.
+
+### Scoring Game
+
+`sim_runner` keeps score and publishes it on `/nandi/game_status` (shown in the browser UI):
+
+* **In basket:** a crop counts once its centre is inside the basket footprint in the trunk frame (`|x| < 0.31 m`, `|y| < 0.11 m`, trunk-frame `z` between the basket floor top, 0.061 m, and +0.12 m, just under the wall tops). The goal is to get all `crops_total` crops into the basket.
+* **Falls:** tilt above 50° or trunk height below 0.12 m counts as a fall (once per fall).
+* **Timer:** `elapsed_s` since the last reset; `rtf` is the measured real-time factor.
+
+**Reset World** (`R`, `/nandi/reset_world`) puts the robot and every crop back to the home keyframe, zeroes the falls counter and the timer, clears the work-envelope wireframe, and asks locomotion to stop and the harvest node to release the arm.
+
+### Missions (autonomous zone harvest)
+
+`atharv_nandi/nodes/mission_executor.py` walks the crop rows inside a zone on its own, stops beside each crop, calls **Auto-Harvest**, moves on, and walks back home. Send a command on `/nandi/mission/command` (`std_msgs/String`, JSON, modelled on the platform's `cmd/mission`):
+
+```bash
+ros2 topic pub --once /nandi/mission/command std_msgs/String \
+  "{data: '{\"mission_id\": \"m1\", \"mode\": \"harvest_zone\", \"not_after\": \"2030-01-01T00:00:00Z\", \"zone\": {\"local_polygon\": [[0.4, 0.15], [3.9, 0.15], [3.9, 1.2], [0.4, 1.2]]}}'}"
+ros2 topic echo /nandi/mission_status
+ros2 service call /nandi/mission/abort std_srvs/srv/Trigger
+```
+
+| Field | Meaning |
+| --- | --- |
+| `mission_id` | Required string, echoed in every status |
+| `mode` | `harvest_zone` (pick every crop in the zone) or `patrol` (visit the pick stops, or the zone's corners if it has no crops, without picking) |
+| `zone` | GeoJSON `Polygon` (or a `Feature` / one-feature `FeatureCollection`) in EPSG:4326, `[lon, lat]` order, closed ring of ≥ 4 positions; or `{"local_polygon": [[x, y], ...]}` in site metres. Holes are ignored. [`config/missions/zone_a.geojson`](config/missions/zone_a.geojson) covers the north row (y ≈ +0.45) of the default field |
+| `not_after` | ISO 8601 / RFC 3339 date-time (`Z`, `+HH:MM`, `+HHMM` or `+HH` offset, any number of fraction digits; no offset = UTC); a command whose `not_after` has passed is rejected, a running mission past it walks home |
+| `max_picks` | Optional positive integer; the mission walks home after this many confirmed picks |
+
+The web console's **Start zone A** sends `{"action": "start", "zone": "zone_a", "source": ..., "mission": {GeoJSON}}`; the executor accepts that form too (`mission_id` = `console-<zone>-<unix s>`, `zone` = the embedded GeoJSON, `not_after` = now + 30 min). Status is also published on `/nandi/mission/status` (with `basket: {n, capacity}`) and the battery on `/nandi/battery_status` (with `percentage`), the names the console panels read.
+
+**Site frame.** The sim world frame is the local East-North-Up frame of the site origin in [`config/missions/site_sim.yaml`](config/missions/site_sim.yaml) (`x` = East, `y` = North). That origin is fictitious (open ocean); no real farm coordinates are stored. `atharv_nandi/core/geo_frame.py` converts WGS84 ↔ local with a tangent-plane approximation on the WGS84 ellipsoid (exact round trip; within 500 m it agrees with a rigorous ECEF → ENU transform to 0.5 cm at 12.5° N and under 4 cm at 60° N) and validates polygons (closed, ≥ 4 positions, finite, non-zero area).
+
+**Acceptance.** A command is answered on `/nandi/mission_status` at once with `state: "rejected"` and one `reason_code`: `command_invalid` (bad JSON, missing `mission_id` or `not_after`, unknown `mode`, `max_picks` not a finite positive integer), `busy` (a mission is already accepted/running/returning, or no sim state yet), `expired`, `zone_invalid`, `zone_outside_geofence` (a zone vertex, the robot itself, or any point of the planned lanes and the way home lies outside the geofence: `geofence` in `config/safety.yaml`, read-only, as the safety supervisor's `{enabled, polygon: [[x, y], ...]}`, `{local_polygon: [[x, y], ...]}` or `{x_min, x_max, y_min, y_max}`; without one, `fallback_geofence` from `site_sim.yaml`), `estopped` (`/nandi/safety_status` reports an e-stop), `locomotion_mode` (`/nandi/locomotion_status` is not in `tripod` mode: the RL policy ignores turn and reverse, so missions walk on the tripod gait only), `basket_full`, or `battery_low` (SoC below the route estimate + 20 %). A `busy` rejection of a second command while a mission is active is published as one extra status message for the new `mission_id` (with `active_mission_id` naming the mission that keeps running); the 2 Hz status of the running mission is not disturbed. Otherwise it goes `accepted` → `running`.
+
+**Plan.** Crops come from `/nandi/crop_detections` when a message arrived less than 1 s ago (`crop_source: "detections"`), otherwise from `/nandi/sim_qpos` truth (`"truth"`). The crops inside the zone are grouped into rows by `y`; each row gets one straight lane 0.38 m outside its outermost crop (on the side that stays inside the geofence, then inside the zone and away from other crops). The zone selects the crops; the lane may lie up to 0.38 m outside the zone, but never outside the geofence, and a pick stop 0.45 m behind each crop. Stops are never placed where a foot would stand on a soil ridge (the pitched trunk would put the crop out of the arm's reach); a crop just past a ridge is picked facing back along the row on the way back. The robot reaches the lane side-on through a transit waypoint, so it does not walk through the crops between home and the row.
+
+**Walking.** `atharv_nandi/core/nav_logic.py` is a pose-to-goal controller on the tripod gait only: heading P-gain 1.6 per rad, turn on the spot while the goal is more than 0.6 rad off the nose, forward command 0.35–1.0, arrival within 0.15 m (0.08 m at pick stops and home). It publishes `/nandi/cmd_vel` with `linear.z = 1` (hold) at 10 Hz while walking, well inside locomotion's 0.5 s dead-man, and the all-zero release when it stops.
+
+**Pick loop.** At a stop the robot turns to face along the row, waits for the gait to settle (not walking, trunk speed < 0.05 m/s, at least 0.6 s), calls `/nandi/auto_harvest` and waits for `/nandi/harvest_status` to leave `ik_harvest` (timeout 60 s, then `release_arm`). `picked` counts **only** a rise of `in_basket` in `/nandi/game_status` (independent truth), never the harvest node's own result text; the crop that entered the basket is credited by name. Each crop gets one retry (from a nearer stop if the arm reported it out of reach: `out of arm reach`, `Arm path out of reach`), then it is skipped with the reason in `results`. If auto-harvest would take a different crop, that crop is tried from this stop only when it is one of the mission's later targets inside the pick window (0.22–0.75 m ahead of the trunk), and the attempt is charged to that crop; otherwise (or after that try) the stop moves once, to the far side of the crop facing back along the row or up to 0.2 m along the row, whichever is level, inside the geofence and makes this crop auto-harvest's choice; if none is, the crop is skipped as `blocked_by_<crop>`.
+
+**Basket and battery.** The basket is full at the stricter of `max_crops` (6) and `max_kg` (6.5 kg, the load-model volume limit; sim crops weigh 0.15 kg, so `max_crops` binds). Full basket, SoC < 25 %, `not_after` passed or `max_picks` reached → `returning` (back along the lane, then home, facing East) → `done` with that `reason_code` (`basket_full`, `battery_low`, `expired`, `max_picks`); a finished zone ends `done` / `completed` (or `no_targets`). The battery model (`atharv_nandi/core/energy_model.py`) integrates P = Σ|τ·q̇| / η + P_idle from `/nandi/joint_states` effort × velocity over sim time; without joint states it drains at P_idle only and reports `source: "idle_only"`. **All energy numbers are assumptions** for the simulator, not measurements: 500 Wh pack, η = 0.6, P_idle = 15 W, route-estimate walking power 220 W (DERIVED from the MEASURED 83-121 W walking mechanical power) (all in `site_sim.yaml`). The battery is reset to full on a world reset and held full while the robot stands within 0.15 m of home with no mission (ASSUMED charger at home), so a long-running executor does not drain to `battery_low` while idle.
+
+**Stopping.** `/nandi/mission/abort` → `aborted`. An outside `/nandi/stop_motion` (console or Tk STOP; seen as a rise of `stop_seq` in `/nandi/locomotion_status`) or a world reset (trunk jump in `/nandi/sim_qpos`) → `aborted` with that `detail`, so STOP always wins over a running mission. An e-stop, a fall, the trunk leaving the geofence, or locomotion leaving `tripod` mode during a mission → `failed` (`estopped` / `fallen` / `geofence_breach` / `locomotion_mode`). Either way the executor publishes the zero release at once, calls `/nandi/stop_motion` and `/nandi/release_arm`, and stops publishing `cmd_vel`.
+
+**Running it in a live container.** Both launchers start `mission_executor`. In a container that is already up, start it by hand: `docker exec -d atharv-nandi bash -lc 'source /opt/ros/humble/setup.bash && python3 -m atharv_nandi.nodes mission_executor'` (adjust the repo path to the container's mount). Outside-STOP detection needs a `locomotion_service.py` that publishes `stop_seq`; under the launcher's supervisor `pkill -f "atharv_nandi.nodes locomotion_service"` restarts just that node (installed `ros2 launch`: `pkill -f "lib/atharv_nandi/locomotion_service"`).
+
+Closed-loop check without ROS (MuJoCo world, real gait, harvest sequence and mission controller): `python3 tools/mission_sim_check.py [--abort-at 6] [--expired]`. ROS wiring check against a frozen world: `python3 -m atharv_nandi.nodes mission_executor & python3 tools/mission_ros_smoke.py`.
+
+### Orchard presets, Ready check and tour gates (WP27)
+
+The orchard missions of MISSION-PRESETS are **presets**: one YAML file each in `config/presets/` (schema `nandi.preset/1`, loaded and validated by `atharv_nandi/core/presets.py`): `scan`, `tree360`, `leaf_scan`, `trunk_scan`, `fruit_scout`, `harvest_mango` (T2 clip, one round), `harvest_guava` (T2 clip or T4 twist), `harvest_papaya` (T4, demo only: OQ-01 A), `harvest_banana` (bunch MARK), `prune`, `prune_banana`, `work_tote`, `work_lead`, `work_follow`, `work_spray` (disabled, `not_in_mvp`), `safe_park`, `return_home`, `stuck_recover`, `estop_recovery`, `self_right_spike`, `dock_unload`. Each gives params (default / min / max / enum), preconditions, steps, interlocks, outputs, KPIs, retry, the season key, console labels (Hindi first), the default motion profile (`gates`) and an ETA / energy / disk `estimate`. A bad param is refused `param_invalid` with the param name; an unknown tree, or no tree registry at all, `registry_mismatch`; a tree of another crop `not_in_mvp`; the same tree twice `param_invalid`. Expressions allow `+ - * / %` and min / max / abs / round / sqrt / ceil / floor / clamp, no power operator; a division by zero or a non-finite result is `param_invalid`, not a crash. A multi-tree command carries `resolved_by_tree` (per-tree orbit radius etc.).
+
+**Ready check** (`atharv_nandi/core/ready_check.py`, MP 0.2 / OS 4.5): `check(preset, ReadyContext, targets, params, field)` gives `go`, `degraded` (needs an operator confirm) or `no_go` with MISSION-PRESETS reason codes: RTK FIXED (FLOAT only for RETURN HOME / SAFE PARK), projected end SoC ≥ reserve (WP7 route energy), disk ≥ 1.5 × estimate, geofence incl. orbit annuli, e-stop, local link up, cloud link, stability, local slope, the WP6 crown gates on the WP6 matrix, wind, alley clear height, tool, payload ≤ 3 kg, light (dawn mode), bagged fruit, the **season matrix** `config/season/up.yaml` (per preset and month, OS 4.5; `demo_all_fruiting` lifts the season entries and says so) and the WP7 weather stub (rain, wet foliage, heat). Chips adjust the run instead of refusing it (SCAN stowed, TREE 360 arcs at mid or stop-and-go, two-sided orbit, FRUIT SCOUT one lap). Every gate's fallback is merged into `adjust` (the more conservative value wins, e.g. `stop_and_go` over `snake_mid`), and each gate judges the plan as the earlier gates adjusted it, so a blocked annulus never hides the crown-walk or clearance fallback. A NaN / inf context value the preset reads (slope, wind, SoC, disk, payload, light, crown extension, position) refuses `sensor_fault` (fail closed); a month outside 1..12 refuses `season`. HARVEST mango is `degraded` in Jul-Aug (Amrapali; monsoon mud, OS 4.5) and `no_go` in September.
+
+**Modes and queue** (`atharv_nandi/core/mission_logic.py`): the 16 MP 0.1 modes are added to `MODES` next to the legacy `harvest_zone` / `patrol` (unchanged). A console `preset_start` maps to one `cmd/mission` type `{mission_id, mode, not_after, plan {source console / zone_alert / edge_hub, preset, version, targets, tree_ids, params}}`; the legacy executor refuses preset modes. `PresetQueue` keeps the console queue with ETA, projected SoC (WP7 coefficients) and free disk per item, and blocks an item with `energy_reserve` / `disk_low` before it starts: `add` needs the item's Ready level (no level = `not_checked`), `pop(soc, disk_free_mb, robot_xy, home_xy, recheck)` refuses a blocked head item with that reason (it stays queued) and can re-run the Ready check at dispatch. The queue is thread-safe.
+
+**Missions and tour gates.** `config/missions/orchard_tour.yaml` scripts OS 1.2 steps 0-12 on `orchard_demo` and `config/missions/recovery_demo.yaml` the separate recovery mission. `tests/test_tour_gates.py` checks every scripted segment and every preset default against the WP6 gate table, the speed caps and the slope rules, with the scripted slopes checked against the terrain (six-foot plane fit); a seeded contradiction (crown-up walk on 5°, 0.20 m/s crown-up, ...) fails. Open: WP0c stations on basin rims (CR-WP27-01), tour ETA ≈ 24.8 min > the 18 min gate on the frozen layout (CR-WP27-02, open project decision), OT-1 alley clear height below the high band (CR-WP27-03). The browser console runs the presets through the Ready check and this queue (WP10, below); the contact and scan presets still have no live executor (WP8 / WP9 / WP38 change request). Tests: `tests/test_presets.py`, `tests/test_ready_check.py`, `tests/test_tour_gates.py`.
+
+### Orchard tour, run card, records and Hindi job sheets (WP9)
+
+`atharv_nandi/core/demo_tour.py` runs the orchard tour: the steps of `config/missions/orchard_tour.yaml` (OS 1.2 steps 0-12, orchard_demo) or the built-in `tour_lite` (orchard_lite: SCAN 2 trees, two-sided TREE 360 with a worker walking in, 1 mango clip, 1 papaya twist, DOCK/UNLOAD). Each step goes through the WP27 Ready check, then runs on one `SimDriver` world with every hook loaded (SCAN walk with crown mid and 3 s bursts, WP25 TREE 360, WP26 LEAF / TRUNK SCAN and FRUIT SCOUT, WP8 HARVEST / PRUNE, the gust and e-stop recovery part, WP13 DOCK/UNLOAD). A tour **passes** when every safety gate holds (0 falls, 0 protective-field violations, 0 unmasked person pixels, 0 motion without confirmation, and the timed gates of the recovery steps that ran: 6-foot stance ≤ 0.5 s and crown stowed ≤ 8.5 s after the gust onset, e-stop stationary ≤ 0.5 s; a missing measurement fails) and the skip limits hold (≤ 1 skipped target per harvest / prune step, ≤ 1 radius re-entry per orbit, no preset step halted, refused or skipped); the sim time against the 18 min / 5 min gate is reported next to it. Pause and abort act inside a running step (abort ends it `aborted` and the robot holds). The 10° patch refusal (step 10 b) is checked again on the terrain measured at the patch. Rows that were not measured (person pixels with geometry capture, keep-wood / green-leaf cuts) are report-only on the card.
+
+```bash
+python3 -m atharv_nandi.core.demo_tour --program tour_lite --seed 7            # ~2 min wall, runs/<run_id>/
+python3 -m atharv_nandi.core.demo_tour --program orchard_tour --steps s05_harvest_mango --no-actors
+python3 tools/nandi_kpi.py runs/<run_id> --card                                # run card (Markdown)
+```
+
+The run directory holds `tree_records.jsonl` (TreeRecord `nandi.tree/1`, ≤ 16 KiB, leads only, `next_actions` from the enum), `marks.jsonl` (MarkRecord `nandi.mark/1`), `harvest_records.jsonl` (`nandi.harvest/2`), `jobsheets/<row>.json | .hi.html | .hi.voice.txt` (JobSheet `nandi.jobsheet/1`, Hindi first, every MARK on a sheet), `uplink_kis_v1.jsonl` (PROPOSED `tele/tree`, `tele/mark`, `tele/harvest`, `tele/mission`, `tele/alert`; person events only as hourly `person_hold_count`), `run_card.json` / `run_card.md` (run_id, device_id, date, `data_provenance: simulated`, detector, `assisted[]`, scripted delays, per-scope KPIs with the OS 1.3 gates, counts) and the manifest. `atharv_nandi/nodes/demo_tour_node.py` takes `/nandi/demo/run` (`{steps: "full" | [ids], program, seed}`) and publishes `/nandi/demo/state`, `/nandi/demo/events`, `/nandi/jobsheet`, `/nandi/records/harvest`, `/nandi/kpi`, `/nandi/kpi/scopes`; it runs the tour on its own world (the live `sim_runner` has no task / dock hook yet) and is not in the launch script. Measured (runner, seed 7): `tour_lite` passes the pass definition in ~131 s wall but takes 573 s sim (> 300 s gate, CR-WP9-02); the full tour runs in five 180 s segments: B1, B2 and C1 pass, the OT-1 orbit segment fails the re-entry limit (2 > 1) and the recovery segment C2 fails O-18 (6-foot stance 0.54 s after the gust onset, gate 0.5 s; finding to WP6 / WP7). Tests: `tests/test_demo_tour_unit.py`, `tests/test_records.py`, `tests/test_job_sheet.py`, `tests/test_uplink_contract.py`, `tests/test_demo_tour_review.py`, `tests/test_tour_lite.py` (`-m tour_lite`), `tests/test_tour_demo.py` (`-m tour`, `-m readiness`).
+
+### Safety (e-stop, speed cap, geofence, falls, watchdogs)
+
+`atharv_nandi/nodes/safety_supervisor.py` owns a **latched e-stop** (logic in `atharv_nandi/core/safety_logic.py`, settings in `config/safety.yaml`, path overridable with `NANDI_SAFETY_CONFIG`):
+
+* **Engage:** `/nandi/estop` (reason `operator`), the paired handheld e-stop (reason `handheld`, WP6), leaving the **geofence** keep-in polygon (reason `geofence`; default a rectangle around the farm plot, x ∈ [-1.5, 7.0] m, |y| ≤ 2.0 m, in the home frame), or a **fall** (reason `fall`: `game_status.is_fallen`, or tilt above 35° for 0.3 s). The first reason sticks and is logged.
+* **Safe hold:** while e-stopped, `sim_runner` ignores `/nandi/arm_targets` and `/nandi/leg_targets` and holds the gantry, arm and legs at the joint angles of the moment of engage (torque is not cut: a hexapod collapses without it), with `kp` × `estop.hold_stiffness_scale` (2), `kv` × `estop.hold_damping_scale` (10, WP6) and a joint brake of `estop.hold_brake_nm` (4 N·m dry friction, half on the arm; WP6 tuning for P-08) so it settles fast. The two fingers keep their last commanded ctrl, so a crop in the gripper keeps its grip force. This also freezes the arm without involving the harvest node. Locomotion stops the gait and refuses `cmd_vel`. `safety_status.hold_mode` reports `safe_hold`. If the supervisor's status was seen and then goes silent for 1 s, `sim_runner` safe-holds too (reason `supervisor_lost`).
+* **Latch survives restarts:** the supervisor saves the latch to `estop.state_file` (`/tmp/nandi_estop_latch.json`, override with `NANDI_ESTOP_STATE`), and a restarted supervisor comes back latched. `sim_runner` leaves a hold only for an `estop_reset` stamped after the hold started (`safety_status.engaged_at` / `rearmed_at`, wall clock), never just because a status says `estopped: false`. If `sim_runner` held on its own (`supervisor_lost`), the supervisor adopts that as its latch once it hears the sim's heartbeat again. `launch_nandi.sh` deletes the state file, so a fresh stack starts un-latched.
+* **Stop metrics:** `sim_runner` measures sim time and trunk travel from engage until trunk speed < 0.02 m/s and reports them as `last_stop` (at default speed, ~0.28 m/s: t ≈ 0.30–0.40 s, 2.5–4.5 cm; all 25 joints are below 0.05 rad/s after ≤ 0.44 s of sim time; measured with the former kv × 2, 2 N·m hold, the WP6 numbers are in the WP6 section).
+* **Re-arm:** `/nandi/estop_reset` is refused while any cause is present, whatever reason latched first: the trunk outside the geofence (after a `geofence` latch it must be at least `geofence.reset_margin_m`, 0.1 m, back inside), or the robot tilted above 35° or fallen. Since nothing can move while e-stopped, **Reset World** is the way back inside / upright; it keeps the latch but makes the cause clear. On re-arm `sim_runner` blends every actuator from the hold pose to the live targets with a smoothstep over 1–3 s (`estop.rearm_*`) instead of snapping to them.
+* **Speed cap:** `gait_params[0]` (speed_scale) is capped at `speed.max_speed_scale` (1.0) and `|(vx, vy)|`, `|yaw|` of `cmd_vel` at `speed.max_cmd` (1.0). A cap below the gait's minimum speed_scale (0.2) is enforced by scaling `cmd_vel` by cap / 0.2.
+* **Stale inputs:** if `/nandi/sim_qpos` is older than 0.5 s, locomotion stops the gait and keeps commanding the last leg pose; `safety_status.stale` lists `/nandi/sim_qpos` / `/nandi/leg_targets` while they are older than 0.5 s.
+* **Liveness:** supervisor, locomotion and sim_runner publish `/nandi/heartbeat` at 2 Hz; the supervisor reports every node it has heard (`nodes`, not ok after 2 s of silence). The harvest node's liveness (`harvest`) is inferred from `/nandi/harvest_status`.
+
+`tools/safety_live_check/run.sh {main|fence|fall|stale}` runs a headless (`NANDI_HEADLESS=1`) stack in a throwaway container and checks these behaviours end to end.
+
+### Crown gates, stance rules, wind response and safety fields (WP6)
+
+`atharv_nandi/sim/hooks/stability.py` (hooks `stability` 50 Hz and `safety_fields` 10 Hz; pure logic in `atharv_nandi/core/stability.py` and `atharv_nandi/core/safety_fields.py`; limits are L0 code constants, never YAML):
+
+* **Crown gates (OS 2.3).** Raise (registered as a WP24 gate): 6-foot stance, 6-foot margin ≥ 0.13 m at the target extension, gravity-relative foot-plane cross-slope ≤ 3°, wind < 10 m/s, no gust. Crown-up walk: `predicted_tripod_margin` (min of tripod A / B, the worse of the measured cross-slope and its mirror so the rack side downhill is always covered, arm at PARK; the CoM carries the welded WP2 tools and the fruit lying in the basket) ≥ 0.04 m to start and ≥ 0.03 m to continue (0.3 s filter), ≤ 0.15 m/s, wind < 8 m/s, slope ≤ 2°, and never across a trunk-basin rim (`gate_crown_path`). Walking ≤ 5° on any fall line; dwell ≤ 5° (20 s) / 3° (60 s). `check_step` is the planning check for tour steps and presets (WP27).
+* **Measured table** (`tools/crown_gate_matrix.py`, `config/crown_gates.json`, run ids inside; WP1 robot + 0.6 kg head + rack tools + 3 kg basket, PARK and worst T4): min 6-foot margin 0.132 m over 930 rows (worst T4 pose, 10° tilt), flat crown-up tripod 0.088 m (T4; PARK 0.102), worst tripod at 5° on any fall line 0.060 m at PARK and 0.045 m at T4 (ext 1.6); tripods go negative only at the T4 pose on ≥ 10° rear-down slopes. The worst T4 pose (WP0c re-freeze) loads the left side: there the rack-uphill side binds (up to 33 mm worse), which the two-sided prediction now covers (never above the measured stance; ≤ 1.7 mm above the measured mirror stance at PARK within 5° pitch, ≤ 5.4 mm at T4). E-stop sit-down at ext 1.6 on 5°: no fall, contact-polygon margin ≥ 0.16 m (the folded legs carry the trunk; the belly rests stay ≈ 5 cm up). Tripod-stance tipping with the crown up: 10.6 m/s under a step wind toward the rear, 15-23 m/s otherwise.
+* **Ordered wind response and retracts.** Wind ≥ 8 m/s or a gust while walking crown-up (≥ 10 m/s or a gust standing): stance request, then a `safety` retract to the WP24 arbiter once the robot stands (or 0.5 s), no walking until stowed (the gait owners stop on it: `sim_driver` and `locomotion_service` honour `motion_inhibit`). A wind retract that could not be sent (e-stop hold, refused) is sent again on the next tick. Also retracts on the margin gate, tilt > 12°, filtered tilt > 6°, local-link loss and low-battery return (`/nandi/stability/alert`). Gust test (11 m/s at mid-stride, ext 1.6, flat and 3°): 6-foot stance 0.12-0.28 s after the request, no fall. State on `/nandi/stability/crown`.
+* **Safety fields (MVP-SPEC 5.3, OS 5.2).** Mast-LiDAR fans + two 0.18 m low planes + the bumper, map-masked; protective / warning polygons offset from the robot hull (feet, arm envelope, crown head), scaled with the crown (protective ≥ 0.5 × lens height, warning ≥ lens height). The stopping distance d_stop(v) is added in the direction of travel (rear when walking in reverse); crown scaling uses the lens height above the local ground (lowest foot), along gravity. Protective intrusion, an animal in the warning field or a bumper touch (sampled at 50 Hz) latches; so does the MVP-SPEC 5.3 stability latch (STOPPED / WORK, stance margin < 0.01 m for 0.3 s), which rides `/nandi/safety_fields` with reason `stability`. The supervisor adopts the latch as an e-stop (`protective` / `animal` / `bumper` / `stability`) and refuses `/nandi/estop_reset` until the field (and the stance margin) stayed clear 0.5 s in a payload younger than 1 s; a supervisor restored with a field latch waits for a fresh payload. A person in the warning field slows walking to 30 %, pauses an orbit, and stops the arm in WORK. State and polygons on `/nandi/safety_fields`. E-stop: tools open and stop, crown brakes in place. The paired **handheld e-stop** (`/nandi/handheld_estop/state` `estop_request`) latches the supervisor with reason `handheld`; reset is refused while the mushroom is still pressed (or its state is older than 1 s).
+* **Motion inhibit:** `bus.values["motion_inhibit"]` (also `/nandi/motion_inhibit`, 10 Hz and on change): a stance / walk / stop inhibit stops the gait and refuses walking commands while set; the warning-field speed scale (0.3) scales the command. **E-stop P-08** (stationary within 0.5 s): with the WP6 hold tuning (kp × 2, kv × 10, 4 N·m brake) the trunk is still (< 0.02 m/s for 0.2 s) ≤ 0.42 s after engage over 162 flat runs (ext 0 / 0.6 / 1.6 × cmd 0.3 / 0.62 / 1.0 × 12 gait phases) and ≤ 0.44 s on ±5° cross-slope; the former kv × 2, 2 N·m took up to 0.64 s. Tests: `tests/test_stability.py`, `tests/test_safety_fields.py`, `tests/test_estop.py`, `tests/test_crown_gates.py`, `tests/test_wind_response.py` (`slow`: crown walk, rim crossing, gust), `tests/test_wp6_review.py`.
+
+### Platform: battery, route energy, GNSS, IMU, links, wind and weather (WP7)
+
+`atharv_nandi/sim/hooks/platform.py` runs inside `sim_runner` (and the WP0b driver) as three hooks. **Every number here is an assumption for the simulator** unless marked measured; payloads carry `assumed: true`.
+
+* **Battery** (`/nandi/platform/battery`, 1 Hz): energy is integrated every physics step as Σ|actuator_force · actuator_velocity| / η + P_idle over every actuator, plus a crown-mast model energy (about 0.021 Wh per metre of mast travel; the sim mast is kinematic). The pack is 8S LFP (25.6 V nominal, 500 Wh, flat OCV curve, 0.05 Ω). The payload is `sensor_msgs/BatteryState`-compatible (`voltage`, `current` negative while discharging, `charge`/`capacity` in Ah, `percentage`, enums) plus `projected_end_soc` and `reserve`. `energy_model.Battery.status()` has the same schema, so the mission executor's `/nandi/battery_status` carries it too. SoC only falls while the robot works. **Dock rule** (the same as the mission executor's, so the two batteries agree): parked within 0.15 m of home with no plan for 5 s (ASSUMED) means the robot is on the charger, so the pack is held full, the reserve latch clears, and the hook raises alert `docked_charged`. There is no charge-rate model. With no plan, the reserve monitor still checks SoC against the walk home + 15 % and latches `return_and_wait` (alert `low_battery_return`, `plan: false`).
+* **Route energy** (`/nandi/energy`, 1 Hz; `atharv_nandi/core/route_energy.py`): `E = Wh_per_m × route_m + Wh_per_item × items + P_idle × t_work + Wh_per_crown_m × crown_m`. The coefficients are measured in the run (ridge fit on 5 s segments, pulled toward the seed) and seeded from the last run card (`NANDI_ENERGY_CARD=<run_card.json>`, key `energy.coefficients`), or from `site_sim.yaml`. **Reserve** = energy to walk back to the headland + 15 % of the pack. `ready_check_energy` refuses a tour whose projected end SoC is below the reserve (reason `energy_reserve`). Mid-tour, a breach that lasts 1 s latches `return_and_wait` (alert `low_battery_return`). The mission layer sends the remaining plan on `/nandi/platform/plan` `{route_m, items, t_work_s, crown_m, return_m}`. `throughput()` reports ha per charge (SCAN) and trees per charge (TREE 360). These are report-only numbers, never gates. Estimator evidence (`test_estimator_within_15_percent_of_integrated_energy`) is limited in scope. It scores the walked route features, so planning error is not included. Run B is 5.95 m / 66 s on the legacy ridges world, not orchard_lite. The test prints the mid-tour error both with and without the measured first half. A wrong-terrain card gives a 15.1 % start error, which is only guarded at 25 %.
+* **GNSS** (`/nandi/gnss/fix`, 10 Hz, NavSatFix-compatible, fictitious site origin): states NONE / FLOAT (0.5 m) / FIXED (0.02 m). The receiver starts FLOAT and becomes FIXED after 5 s. Scripted dropouts come from `NANDI_GNSS={"dropouts": [{"t0", "dur", "state"}]}` or `/nandi/gnss/cmd`. `gnss_model.rtk_start_gate` needs FIXED (FLOAT is allowed only for `return_home` / `safe_park`; otherwise reason `rtk`). `RtkSupervisor` handles a loss mid-row: finish the item, pause, wait 30 s, then return on odometry to the last FIXED waypoint. **Pose estimate** (`/nandi/pose_estimate`, 10 Hz) fuses odometry (2 % drift) with the fix.
+* **IMU** (`/nandi/imu`, 50 Hz, Imu-compatible): the `imu_quat` / `imu_gyro` / `imu_acc` sensors plus the hal-sim-to-real §4 noise layer (gyro 0.01 rad/s plus bias walk, accel 0.05 m/s², orientation 0.2°). `NANDI_IMU_NOISE=0` publishes ideal values (`noise: false`).
+* **Links** (`/nandi/link/local`, `/nandi/link/cloud`): heartbeats arrive on `/nandi/link/{local,cloud}/heartbeat`. Any JSON message counts as a beat, including `1`, `true`, `null` and `{}`. The bus counts each delivery (`bus.arrival_count`). Local silent for more than 0.5 s gives `lost`, action `stop_hold` (alert `local_link_lost_hold`). Cloud silent for more than 5 s gives `safe_park_hold` (alert `cloud_link_lost_hold`). A link that has not beaten yet is `unknown`, and the Ready check should refuse to start. After a reconnect, `action` stays `await_confirm` (with `needs_confirm`) until `/nandi/link/cmd {"ack": "local"}`. The robot never resumes on the restore alone. `/nandi/link/cmd {"drop": {"link", "dur"}}` injects a loss. The watchdog runs on sim time. `NANDI_LINK={"clock": "sim_and_wall"}` also requires the wall-clock age to pass the timeout, for faster-than-real runs fed by a wall-paced heartbeat. A malformed command on any WP7 input topic is rejected (alert `cmd_rejected`, state unchanged) and never disables the hook. `values["platform"]["t"]` and `values["link"][k]["t"]` carry a sim-time stamp, so readers can detect stale values.
+* **Wind** (`/nandi/wind`, 10 Hz; `atharv_nandi/core/wind_model.py`): a scripted base wind, gusts and optional turbulence (`NANDI_WIND` or `/nandi/wind/cmd`). Drag is ½ρv²·Cd·A on every geom of the trunk and mast bodies, with Cd 1.2 for tubes, 1.5 for boxes and 0.5 for spheres. A is the exact silhouette against the relative wind, and nested mast sections are shadowed by the outer tube. The force goes into `xfrc_applied` at each geom centre, so the tipping moment of a raised mast reaches the physics. The anemometer has a 0.05 s lag and a 10 s mean. The **gust flag** sets when the speed reaches the mean + 5 m/s and clears 3 s after it falls below the mean + 4 m/s. A calm script writes nothing, so legacy physics stays byte-identical. Every script field is validated: finite values, `turb_tau_s` > 0, `z_ref_m` > 0, `shear_alpha` in [0, 1]. A gust's `peak_mps` is the peak speed in any direction. If the wind hook raises, its own drag is removed from `xfrc_applied` first. When sim time jumps back (MuJoCo's auto-reset), the drag bookkeeping is forgotten. A world reset drops runtime wind, temperature, rain and GNSS injections.
+* **Weather stub** (`/nandi/weather`, 1 Hz; `atharv_nandi/core/weather_stub.py`): `NANDI_WEATHER={"month", "start_hour", "rain": [...], "temp_c", "temp_offset_c"}` or `/nandi/weather/cmd`. It gives UP diurnal temperature from approximate monthly normals, rain, and wet foliage until 2 h after rain. `preset_verdict(state, preset)` matches an id to its class exactly or by the `<class>_` prefix, so `harvest_mango`, `clip_prune` and `leaf_scan_dawn` all match. An unknown id is judged like a contact preset. It gives these results: rain is no-go, wet foliage is no-go for LEAF SCAN and contact presets, above 42 °C is no-go and above 38 °C is degraded. Recovery, dock and return home are never blocked by weather.
+
+
+### Arm planning, hardware abstraction and grasp contacts (WPCAP)
+
+These are library layers. WP8 wires them into harvest; no node or topic changes yet. Contract and measured numbers: [docs/cap-libraries.md](docs/cap-libraries.md).
+
+* **Motion planning** (`atharv_nandi/core/planning/`): `ArmPlanner.from_config(model).plan(None, q_goal, data=data, ignore=[target], attach=[held])` plans collision-free 5-DOF arm paths (gantry, yaw, shoulder, elbow, wrist pitch).
+  * **Backends:** OMPL 2.0.1 RRT-Connect (PyPI wheel, in the sim image), or the documented pure-Python RRT-Connect fallback when `import ompl` fails. Both use one validity checker.
+  * **Collision checks:** done in MuJoCo (`mj_collision` on a private model copy, arm geoms against obstacle classes). Classes and clearances: robot 5 mm, wood/fruit/fixture/keep-out (mast, crown, tray) 10 mm, ground 20 mm. The explicit finger-fruit pairs follow `ignore` / `attach` too, so carry plans with a gripped fruit work. `attach` carries the attached body's whole subtree (a tool's head, blades and jaws on their own joints).
+  * **Output:** a dense re-check of the final path, then a trapezoidal trajectory under the `config/hal.yaml` joint limits.
+  * **Measured:** typical pick plans with a blocking branch take ≤ 0.6 s, and p50 is 0.14 s.
+* **HAL** (`atharv_nandi/core/hal/`, `config/hal.yaml`): a ros2_control-style layer.
+  * **Interfaces:** `position` / `velocity` / `effort` command and state interfaces per joint, plus IMU and tool-flange sensor states.
+  * **Resource manager:** lifecycle, exclusive claims and limit clamps. Releasing a velocity / effort claim puts the joint into a position hold at its current pose (safety interlock); `JointTrajectoryController.follow` refuses a trajectory that does not start within `start_tolerance` (0.05) of the joint state.
+  * **Controllers:** `JointStateBroadcaster`, `ForwardCommandController`, `JointTrajectoryController`, and a `ControllerManager`.
+  * **Backends:** `MujocoSystem` and `StubSystem` (bench stub with lag, delay, noise and faults). Select one with `NANDI_HAL_BACKEND=mujoco|stub`; `NANDI_HAL_CONFIG` points to another file.
+* **Contact pairs** (`atharv_nandi/sim/world/modules/contact_pairs.py`, orchard worlds only; the legacy world is unchanged):
+  * **finger-fruit:** explicit pairs with condim 4 torsional friction. A fruit gripped off-axis turns 0.65° instead of 35°. Lift slip is ≤ 0.3 mm.
+  * **fruit-tray:** priority-2 tray params, condim 6. There is no jitter: drift ≤ 3 µm.
+  * **foot-soil:** pinned and unchanged, at 0.69 mm standing penetration.
+
+---
+
+## ROS 2 Interface
+
+All JSON payloads are `std_msgs/String`. Joint vectors are `std_msgs/Float64MultiArray` in the order given by the model (arm: gantry, yaw, shoulder, elbow, wrist, finger_l, finger_r; legs: FR, FL, MR, ML, RR, RL × hip, thigh, calf).
+
+### Topics
+
+| Topic | Type | Publisher → Subscriber | Payload |
+| --- | --- | --- | --- |
+| `/nandi/cmd_vel` | `geometry_msgs/Twist` | UIs → locomotion | `linear.x` = vx ∈ [-1, 1] (forward +), `linear.y` = vy ∈ [-1, 1] (left +), `angular.z` = yaw ∈ [-1, 1] (+ = turn left / CCW), `linear.z` = `1.0` hold (keep walking while commands keep arriving) or `0.0` single step (one gait cycle). All zero with `linear.z = 0` = release (finish the cycle, stop). Senders re-publish a held command at ≥ 5 Hz; a hold with no message for 0.5 s is treated as released. |
+| `/nandi/gait_params` | `Float64MultiArray` | UIs → locomotion | `[speed_scale, step_height_scale, freq_hz, balance_gain]`, clamped to the ranges above |
+| `/nandi/locomotion_status` | `String` (JSON, 2 Hz) | locomotion → UIs | `{"mode": "tripod"\|"rl", "policy_loaded": bool, "policy_path": str\|null, "gait_params": [4], "walking": bool, "stop_seq": int}` (`stop_seq` counts `/nandi/stop_motion` calls; published at once on each) |
+| `/nandi/leg_targets` | `Float64MultiArray` (18) | locomotion → sim_runner | Leg joint position targets |
+| `/nandi/rl_arm_targets` | `Float64MultiArray` (5) | locomotion → harvest | Arm balance targets from the RL policy (gantry + 4 arm joints) |
+| `/nandi/manual_arm` | `Float64MultiArray` (7) | UIs → harvest | Manual arm + gripper targets (switches the arm to manual mode) |
+| `/nandi/arm_targets` | `Float64MultiArray` (7) | harvest → sim_runner | Final arm + gripper targets after arbitration |
+| `/nandi/harvest_status` | `String` (JSON, 2 Hz + on change) | harvest → UIs | `{"mode": "rl_balance"\|"ik_harvest"\|"manual"\|"tool_change", "phase": str, "target": str\|null, "last_result": str}` |
+| `/nandi/sim_qpos` | `Float64MultiArray` (nq) | sim_runner → all | Full world `qpos`: trunk `[0:7]`, arm `[7:14]`, legs `[14:32]`, then 7 per crop, then any joints of world modules (look them up by name, `model_layout`) |
+| `/nandi/sim_state` | `String` (JSON `nandi.sim_state/1`, 30 Hz sim time) | sim_runner → renderers, recorder, scoring | `{"schema", "world_id", "t", "nq", "qpos", "nmocap", "mocap_pos", "mocap_quat", "neq", "eq_active", "mutations": {"v": 1, "providers": {key: {"v", "data"}}}}`; apply with `camera_rig.set_state` (refuses a `world_id` mismatch). sim_runner also declares the parameters `world_id`, `layout` (JSON) and `hooks` |
+| `/nandi/game_status` | `String` (JSON, 2 Hz) | sim_runner → UIs | `{"crops_total": int, "in_basket": int, "in_basket_names": [str], "falls": int, "fallen": bool, "elapsed_s": float, "rtf": float}` |
+| `/nandi/joint_states` | `sensor_msgs/JointState` (50 Hz sim time) | sim_runner → all | Every actuator with a joint transmission, in actuator order: the 25 robot joints (all of them in the legacy world), then appended module joints; site / body / tendon actuators are left out (`name` = joint names), `position`, `velocity`, `effort` = actuator force |
+| `/nandi/safety_status` | `String` (JSON, 10 Hz + on change) | safety_supervisor → all | `{"estopped": bool, "latched_reason": "operator"\|"geofence"\|"fall"\|"supervisor_lost"\|null, "speed_cap": float, "geofence_ok": bool, "fallen": bool, "stale": [topic], "last_stop": {"t_s", "dist_m"}\|null, "nodes": {name: {"age_s", "ok"}}, "hold_mode": "safe_hold"\|"none", "geofence_margin_m": float\|null, "tilt_deg": float, "engaged_at": float\|null, "rearmed_at": float\|null}` (wall-clock stamps of the current latch / last re-arm) |
+| `/nandi/heartbeat` | `String` (JSON, 2 Hz) | safety_supervisor, locomotion, sim_runner → safety_supervisor | `{"node": str, "t": float, "ok": bool, "info": {}}`; sim_runner's `info` carries `hold_mode`, `hold_reason`, `last_stop` |
+| `/nandi/workspace_wireframe` | `String` (JSON) | UIs, sim_runner (on reset) → sim_runner, UIs | Reachability wireframe segments to draw, trunk frame (empty string clears) |
+| `/nandi/beacon` | `String` (JSON, on change + 1 Hz) | sim_runner (hook `beacon`) → UIs | `{"state", "source", "reason", "pattern": {"rgb", "mode", "hz"}, "rgba", "on", "t"}`; state by priority `estop` > `fault` > `premotion` > `assist` > `stopped` > `charging` > `driving` > `tool_change` > `going_home` > `working` > `idle` (WP1) |
+| `/nandi/beacon/request` | `String` (JSON) | mission, presets, tools, dock → sim_runner | `{"state", "source", "reason"?}`; `estop` / `fault` cannot be requested (WP1) |
+| `/nandi/handheld_estop` | `String` (JSON, ≥ 2 Hz) | handheld bridge → sim_runner | `{"device", "boot"?, "seq", "pressed"}`, console-independent; the first device heard is paired (WP1) |
+| `/nandi/handheld_estop/state` | `String` (JSON, on change + 2 Hz) | sim_runner (hook `handheld_estop`) → supervisor, UIs | `{"seen", "pressed", "link_ok", "age_s", "estop_request", "local_link_lost", ...}`; link lost after 0.5 s of silence (WP1) |
+| `/nandi/transfer/cmd` | `String` (JSON) | task layers, console → sim_runner (hook `transfer`) | `{"op": "place"\|"unload"\|"pause"\|"resume"\|"abort"\|"release_slots", "fruit_id"?, "target"?: "auto"\|0..7\|"cradle", "seq"?}` or a list of 1-16 of them (batch); newest message per 20 ms tick wins (`cmd_lost` event); malformed → `cmd_refused` event (WP3) |
+| `/nandi/transfer/state` | `String` (JSON, 2 Hz + on change) | sim_runner (hook `transfer`) → UIs, presets | `{"busy", "paused", "job", "cells", "cradle", "payload_kg", "ballast_kg", "crate": {"n", "kg", "dropped", "max_impact_mps", "per_tree"}, "per_tree", "fruit_contacts", ...}` (WP3) |
+| `/nandi/transfer/events` | `String` (JSON, per event) | sim_runner (hook `transfer`) → UIs, recorder | `{"seq", "t", "event", ...}`: `place_start`, `seated`, `released`, `delivered`, `dropped`, `paused`, `refused`, `fruit_contact`, `cmd_lost`, ... (WP3) |
+| `/nandi/tool/change` | `String` (JSON) | console, presets, task layer → sim_runner (hook `tools`) | `{"tool": "T2"\|"T4"\|"T5"\|"T1"\|null}`: rack swap (dock the mounted tool, mount the target); `{"ack_fault": true}` clears a swap fault, `{"release": true}` releases the caught fruit (WP2) |
+| `/nandi/tool/actuate` | `String` (JSON) | console, task layer → sim_runner | `{"roll"?, "value"?: blade 0..1 \| jaw opening m, "open"?, "stop"?}` on the mounted tool (WP2) |
+| `/nandi/tool/state` | `String` (JSON, 2 Hz + on change) | sim_runner → UIs, presets | `{"mounted", "parked", "mount", "phase", "reason", "busy", "tcp_frame", "assisted", "roll", "value", "caught", "sensors", "last"}` (WP2) |
+| `/nandi/tool/event` | `String` (JSON, per event) | sim_runner → UIs, task layer, recorder | `tool_change_done` / `_fault` / `_refused`, `tool_locked`, `tool_fault_cleared`, `catch_released`, `cut`, `cut_miss`, `cut_refused`, `prune_refused`, `twist_release`, `actuate_refused` (WP2) |
+| `/nandi/tool/arm_targets` | `String` (JSON, 50 Hz during a swap) | sim_runner → arm owner | `{"q5", "fingers", "payload_kg", "phase"}` without gravity feed-forward (WP2; forwarding is a WP8 change request) |
+| `/nandi/mission/command` | `String` (JSON) | operator / fleet → mission executor | `{"mission_id", "mode": "harvest_zone"\|"patrol", "zone", "not_after", "max_picks"?}` (see Missions) |
+| `/nandi/mission_status` | `String` (JSON, 2 Hz + on change) | mission executor → UIs | `{"mission_id", "state": "idle"\|"accepted"\|"running"\|"returning"\|"done"\|"rejected"\|"failed"\|"aborted", "reason_code", "detail", "mode", "phase", "progress": 0..1, "waypoint_idx", "waypoints_total", "target_crop", "attempted", "picked", "basket_count", "basket_capacity", "basket": {"n", "capacity"}, "soc", "crop_source": "truth"\|"detections", "results": {crop: "picked"\|"skipped:<why>"}}`; also on `/nandi/mission/status` for the console. A `busy` reply adds `active_mission_id` |
+| `/nandi/battery` | `String` (JSON, 2 Hz) | mission executor → UIs | `{"soc", "power_w", "energy_wh", "est_remaining_min", "source": "joint_states"\|"idle_only", "assumed": true}` |
+
+### Services (all `std_srvs/Trigger`)
+
+| Service | Server | Behaviour |
+| --- | --- | --- |
+| `/nandi/toggle_locomotion_mode` | locomotion | Toggles Tripod ↔ RL; replies `Mode: RL Balance Policy` / `Mode: Tripod Gait`, or `success=false`, `No RL policy loaded - using Tripod gait` when no policy is loaded |
+| `/nandi/stop_motion` | locomotion | Stops the gait immediately |
+| `/nandi/auto_harvest` | harvest | Starts the asynchronous pick-and-place of the nearest crop in reach (see Harvesting) |
+| `/nandi/release_arm` | harvest | Leaves manual / IK mode for RL balance, aborting a running harvest; the arm returns to rest |
+| `/nandi/estop` | safety_supervisor | Engages the latched e-stop (reason `operator`); see Safety |
+| `/nandi/estop_reset` | safety_supervisor | Re-arms; `success=false` while any cause (outside the geofence, tilted / fallen) is still present |
+| `/nandi/reset_world` | sim_runner | Resets robot and crops to the home keyframe, zeroes falls and timer, clears the wireframe, then calls `stop_motion` and `release_arm` |
+| `/compute_work_envelope` | work envelope | Samples the arm's joint limits (shoulder up to the planner's carriage-clearance limit, not the 2.4 rad joint range) and returns the reachability wireframe JSON in the message |
+| `/nandi/estop` | safety supervisor (optional) | Latch an emergency stop. Called by the browser and Tk **E-STOP** together with `stop_motion` |
+| `/nandi/estop_reset` | safety supervisor (optional) | Clear the E-STOP latch (operator only, after a confirmation) |
+| `/nandi/mission/abort` | mission executor (optional) | Aborts the active mission (browser **Abort**; `aborted`, zero `cmd_vel`, stop motion, release arm); `success=false` when no mission is active |
+
+### Orchard console (WP10)
+
+The page opens in **Hindi** (`EN` switches; machine-drafted wording, native review pending) with views **Map**, **Tree**, **Queue**, **Recovery**, **Jobs**, **Drive** and **3D** (bottom nav on phones, a side sheet next to the 3D view on wider screens). **Map**: the orchard from the WP4 registry (`config/fields/<world>.json`) with each tree's physical tag, rows and blocks (chips, or **Lasso** to drag-select), the geofence, drip laterals, rope lines, the TREE 360 orbit annulus (r1) of the selected or running tree, a live coverage ring and the robot pose. **Tree card**: last record, filtered TREE 360 strips (`/media/...`, FilteredFrames only), and [360] [Leaf] [Trunk] [Scout] [Harvest] [Prune] [Mark], each mapped to the crop's preset and disabled with its Ready reason. **Preset bar**: the 21 WP27 tiles with level, reason, season label and "·sim" when the tile has no live executor here. A start runs the WP27 Ready check on the live topics (RTK, links, SoC, disk, wind, weather, slope, stability, tools, payload, light), asks for a confirm on a degraded result and queues the item (`PresetQueue`: ETA, end SoC, end disk, blocked reasons; reorder / remove). **Queue**: the running item with Pause / Resume / Abort, progress chips, live band strips (low / mid / high coverage) and the crown gauge (extension, gate, arbiter source, wind, tripod margin; Stow / Mid / High go to the WP24 arbiter). **Recovery**: links (local incl. the sim handheld, console), SAFE PARK, RETURN HOME, Resume / Halt for the link and park prompts, the operator e-stop confirm (the local confirm comes only from the handheld), abort, the FALLEN checklist and "Sim: drop link 6 s". **Jobs**: the Hindi-first job sheet per row (printable HTML download) and the MARK list; [Mark] on the tree card adds an operator MARK (`/nandi/mark`). An assist request opens Take over / Skip / Halt. **E-STOP** sits outside every view (112 px; 76 px above the nav on phones).
+
+What runs live: **TREE 360** (WP25 hook; the bridge relays `/nandi/tree360/drive` onto `/nandi/cmd_vel`), **SAFE PARK / RETURN HOME / e-stop operator confirm** (WP28 hook, armed on first use; `/nandi/recovery/motion` relayed), **WORK** (WP29 hook, `/nandi/work/drive` relayed). The relay stops on the E-STOP latch and on a stale drive (0.5 s, TREE 360 included: the hook republishes its drive every 0.1 s). Any STOP (the console's, the Tk panel's, any `/nandi/stop_motion` call, seen through `stop_seq` on `/nandi/locomotion_status`) and Pause hold the relay, pause the running preset (a recovery behaviour is aborted) and the queue until Resume. While it drives, a manual walk, the arm and gait sliders, mission start and Auto Harvest are refused (arm PARKed while walking). TREE 360 strips under `/media/` need the per-process key the bridge puts into each record's URLs (authenticated clients only). The contact and scan presets run in the WP9 demo-tour world when `atharv_nandi/nodes/demo_tour_node.py` is up and the tour has the same step, otherwise they are reported `no_live_executor` (the `cmd/mission` goes out on `/nandi/preset/run`); DOCK/UNLOAD waits for the WP13 hook. The console link heartbeat (`/nandi/link/cloud/heartbeat`, 1 Hz) beats only while a browser is connected: closing the last tab lets WP28 CLOUD LINK safe-park the robot (when armed). On orchard worlds the safety supervisor still uses the legacy geofence of `config/safety.yaml` (change request CR-WP10-01): a walk to OT-1 latches `geofence` unless `NANDI_SAFETY_CONFIG` carries the field polygon. Every console command is operator-only and audit-logged; each console stream is <= 2 Hz and only sent on change, and each browser gets <= 1 MiB/s (sliding 1 s window; measured 153-164 KB/s on orchard_demo). Tests: `tests/test_console_protocol.py`, `tests/test_web_scene.py`, `tests/test_web_layout.py`.
+
+### Console Inputs (optional topics, from the pilot packages)
+
+`atharv_nandi/nodes/web_bridge.py` subscribes to these when they exist and relays them to the browser in each state frame (`ext`, plus per-topic ages and a `health` map); each panel shows `n/a` while its topic is absent. All are `std_msgs/String` JSON except the camera. Field names in brackets are the ones the panels read; unknown fields are ignored.
+
+| Topic | Publisher | Used for |
+| --- | --- | --- |
+| `/nandi/safety_status` | safety supervisor | E-STOP banner (`estop`\|`latched`, `reason`, `stop_t_s`, `stop_dist_m`), node-health strip (`nodes: {name: "ok"\|"warn"\|"fail" \| bool \| {age_s}}`), battery fallback (`battery_pct`) |
+| `/nandi/mission/status` | mission executor | Mission panel (`state`, `progress` 0–1, `picked`, `attempted`, `basket: {n, capacity}`, `run_id`) |
+| `/nandi/mission/command` | **web bridge** → mission executor | **Start zone A** publishes `{"action": "start", "zone": "zone_a", "source": "config/missions/zone_a.geojson", "mission": {GeoJSON}}` |
+| `/nandi/battery_status` | platform / sim | Battery bar (`percent` 0–100, or `percentage` 0–1) |
+| `/nandi/telemetry` | telemetry bridge | Run id and up to 8 KPI counters (`run_id`, `kpis: {name: value}`) |
+| `/nandi/crop_detections` | perception | Yellow rings in the 3D view and the detection count (`{"frame": "world", "detections": [{"x", "y", "z", "label", "confidence"}]}`; `position: [x, y, z]` is accepted too) |
+| `/nandi/camera/head/compressed` | perception / sim (`sensor_msgs/CompressedImage`, JPEG or PNG) | Camera thumbnail; relayed as base64 at most 2 Hz, frames over 512 KiB are dropped |
+
+`GET /healthz` returns `{"ok": bool, "nodes": {name: "ok"\|"warn"\|"fail"\|"n/a"}, "last_qpos_age_s": float\|null}` with HTTP 200, or 503 when `/nandi/sim_qpos` is missing or older than 2 s. Topic ages under 2 s are `ok`, under 5 s `warn`, otherwise `fail`; the safety supervisor's own `nodes` verdicts override them.
+
+### Nodes
+
+| Node | Role |
+| --- | --- |
+| `atharv_nandi/nodes/sim_runner.py` | Steps MuJoCo physics, hosts the passive 3D viewer (none with `NANDI_HEADLESS=1`), draws the body-attached work-envelope wireframe, publishes `sim_qpos`, `joint_states` and `game_status`, safe-holds while e-stopped, serves `reset_world` |
+| `atharv_nandi/nodes/locomotion_service.py` | Turns `cmd_vel` + `gait_params` into leg targets via `TripodGaitGenerator` or `RLBalanceController`; serves mode toggle and stop; speed cap, refuses `cmd_vel` while e-stopped, holds on stale `sim_qpos` |
+| `atharv_nandi/nodes/safety_supervisor.py` | Latched e-stop (operator / geofence / fall), `safety_status`, heartbeat liveness; serves `estop` and `estop_reset` |
+| `atharv_nandi/nodes/harvest_ik_service.py` | Arbitrates arm ownership (RL balance / IK harvest / manual) and runs the DLS IK pick-and-place sequence |
+| `atharv_nandi/nodes/work_envelope_service.py` | Introspects the MJCF manipulator joints and limits to compute a 3D reachability wireframe on demand |
+| `atharv_nandi/nodes/control_panel_gui.py` | Tk operator console, built on `NandiROSClient` (`atharv_nandi/core/ros_client.py`) |
+| `atharv_nandi/nodes/mission_executor.py` | Runs missions: zone → row plan → waypoint walking → pick loop → return home; publishes `mission_status` and `battery` |
+| `atharv_nandi/nodes/{stability_monitor,perception_node,telemetry_bridge,run_recorder}.py` | Pilot nodes, started by both launchers (`atharv_nandi/launch_plan.py`); `demo_tour_node.py` is started by hand |
+| `atharv_nandi/nodes/web_bridge.py` | Serves the browser console (`atharv_nandi/web/`), `/healthz`, `/media/` (TREE 360 strips) and a WebSocket on `:8080`; authenticates clients (operator / viewer / dev), streams world poses (from `/nandi/sim_state`: mast, fruit pool, actors) + status + console inputs at 30 Hz and the WP10 console streams at <= 2 Hz, runs the preset queue and the hook executors, relays the hooks' drive onto `/nandi/cmd_vel`, forwards permitted browser commands and audits them |
+
+`launch/launch_nandi.sh` and `launch/nandi.launch.py` supervise every node except `sim_runner`: a node that exits with a non-zero status is logged (`[launch_nandi] web_bridge exited with status 143; restart 1/3 in 2 s`) and restarted up to 3 times (`NANDI_NODE_RESTARTS`); a node that ran for 60 s before failing gets its budget back. A clean exit (status 0, e.g. closing the Tk window) is not restarted. `pkill -f "atharv_nandi.nodes web_bridge"` (source tree: the bash launcher, or `nandi.launch.py` from source) therefore restarts just the bridge, which is all a bridge code change needs; with the installed package (`ros2 launch atharv_nandi nandi.launch.py` after `colcon build`) the command line is `.../lib/atharv_nandi/web_bridge --ros-args ...`, so use `pkill -f "lib/atharv_nandi/web_bridge"`. `pkill -f "atharv_nandi[.]nodes web_bridge|lib/atharv_nandi/web_bridge"` matches both.
+
+All kinematics, gait math, RL inference, scoring and client logic live in pure Python modules under `atharv_nandi/core/`, so the ROS nodes stay thin and the logic is unit-testable without ROS. Every live node builds the same world through `atharv_nandi.core.farm_scene.load_farm_model()`, which keeps `nq` and the `qpos` layout identical across processes.
+
+---
+
+## Docs
+
+The pilot design set lives in [`docs/`](docs/README.md) (drafts for review, not approved):
+
+| Document | Contents |
+| --- | --- |
+| [docs/hld.md](docs/hld.md) | Node graph, base topic/service table, data flow to `kis/v1`, deployment, and (section 7) every orchard topic with its owner WP and status |
+| [docs/state-machines.md](docs/state-machines.md) | Mission, harvest phases, arm arbitration, e-stop latch; orchard: run-supervisor lifecycle [PROPOSED], crown mast and wind response, TREE 360 phases, recovery and e-stop recovery, dock and DOCK/UNLOAD, WORK assist and the workflow engine |
+| [docs/safety-case.md](docs/safety-case.md) | Hazard log incl. crown strike, wind, raised-mast fall envelope, debris and bunches, blades and jaws, orbit near workers, laterals, animals; stopping-time method; beacon map; L0 layering; the tripod-margin correction (0.083 m) |
+| [docs/test-plan.md](docs/test-plan.md) | Test levels and tiers, proposed CI gates, the orchard mandatory tests by file, tour and RTF evidence (WP11), pass/fail per criterion |
+| [docs/sim-fidelity-register.md](docs/sim-fidelity-register.md) | What the sim models faithfully, approximately or not at all, and the assisted register (every truth, weld or kinematic shortcut a run card can list) |
+| [docs/hal-sim-to-real.md](docs/hal-sim-to-real.md) | HAL target, migration from `/nandi/sim_qpos`, noise/latency layer, Mac GPU notes |
+| [docs/runbook-field.md](docs/runbook-field.md) | Bring-up, stopping, recovery, logs, update and rollback |
+| [docs/cap-libraries.md](docs/cap-libraries.md) | WPCAP: OMPL arm planning with MuJoCo collision checks, ros2_control-style HAL, contact/grasp pairs |
+
+**Contract index (WP12 fold-in).** [docs/hld.md](docs/hld.md) section 7 folds the topics of every orchard package into one table: 94 topic names from the 17 packages that own topics (WP0-WP9, WP13, WP24, WP25, WP27-WP29, WP34), each with its owner WP and its status. All 94 names are strings in code on `feat/nandi-pilot` today, but two are only published: `/nandi/preset/run` (no live executor for SCAN, LEAF, TRUNK, SCOUT, HARVEST, PRUNE; the console reports `no_live_executor`, CR-WP10-02) and `/nandi/dock/cmd` (no WP13 hook yet); their rows say "name only; consumer [PROPOSED]". Section 7.1 shows which orchard contract additions landed under which name, and section 7.2 lists the in-process extension points (world modules, hooks, sim-state providers, the mast arbiter, motion inhibit, platform values, the workflow engine). The pilot nodes that the first draft listed as proposed (`safety_supervisor`, `mission_executor`, `perception_node`, `telemetry_bridge`, `run_recorder`) are all built. HLD section 6 lists the names that are still duplicated or have no publisher or no subscriber (`/nandi/mission/status`, `/nandi/battery_status`, `/nandi/telemetry`, `/nandi/dock/cmd`, `/nandi/preset/run`). The tables above in "ROS 2 Interface" stay the contract for the base stack. `tests/test_design_docs.py` checks the docs' links, contract names and Mermaid blocks. `tests/test_wp12_docs.py` checks the fold-in against the code, the assisted register against the code's `assisted` tags, the safety-case beacon map against `atharv_nandi/sim/hooks/beacon.py`, and the state tables against the code.
+
+---
+
+## Run Evidence and the Atharv `kis/v1` Bridge
+
+Everything in this section is **simulated** evidence: every record carries `"data_provenance": "simulated"` and must never be reported as a measurement from a real field.
+
+### Recording a run
+
+```bash
+docker exec -it atharv-nandi bash -lc 'source /opt/ros/humble/setup.bash && python3 -m atharv_nandi.nodes run_recorder'
+```
+
+`atharv_nandi/nodes/run_recorder.py` (node `nandi_run_recorder`) sits next to the stack, writes `runs/<run_id>/` while you drive and harvest, and closes the run on `Ctrl+C` / SIGTERM. `run_id = <UTC yyyymmddThhmmssZ>-<short git sha>-<NANDI_SEED>`; `runs/CURRENT` names the live one. `runs/` is git-ignored (`runs/.gitignore`). Both launchers start it.
+
+| File | Content |
+| --- | --- |
+| `meta.json` | `run_id`, `device_id` (`nandi-sim-01`), `git_sha`, `dirty`, `sw` (version string `atharv-nandi <sha7>[-dirty]`, also in every attempt and in `state.fw`), config SHA-256s, `NANDI_TERRAIN`, `NANDI_SEED`, `NANDI_CROPS`, `start_utc`, kis/v1 `boot` and last will |
+| `kis_v1.jsonl` | every kis/v1 message, one `{"topic", "retain", "payload"}` per line |
+| `harvest_attempts.jsonl` | one line per `auto_harvest` attempt: crop id, crop xyz at start/end, start time, phase timings (from `/nandi/harvest_status` transitions), the node's result text, **`success` from basket truth** (`in_basket` went up in `/nandi/game_status` and lists the crop, read 1.5 s after the attempt ends), `reported_success` (the node's own verdict) and `agrees`, plus `crop_max_rise_m`, `lost_in_phase` and `outcome` (`picked`, `lost_after_grasp`, `false_grasp_report`, `not_picked`) |
+| `events.jsonl` | `fall`, `world_reset`, `intervention` (a `/nandi/cmd_vel` or `/nandi/manual_arm` command while a harvest or mission runs), `estop` (`/nandi/safety_status`), `run_end` |
+| `joint_effort_summary.json` | peak and RMS \|effort\| and \|velocity\| per joint from `/nandi/joint_states` (`sensor_msgs/JointState`, published by the safety package; without it the file says so), with % of the MJCF `forcerange` |
+| `manifest.json` | SHA-256 per file and a Merkle root over the run directory (platform mission-manifest style: leaf = SHA-256(path ‖ 0x00 ‖ file hash), files sorted by path, odd node carried up). Unsigned: the sim has no device key |
+| `kpi.json` | written by `tools/nandi_kpi.py` |
+
+`/nandi/run_status` (`std_msgs/String` JSON, 1 Hz, from the recorder): `{"run_id", "device_id", "sw", "run_dir", "elapsed_s", "attempts", "picks", "pick_success_rate", "picks_per_hour", "falls", "estops", "interventions", "kis_messages", "data_provenance"}` for the consoles.
+
+### KPIs and headless evaluation
+
+```bash
+python3 tools/nandi_kpi.py runs/<run_id>      # table + kpi.json (+ manifest refresh)
+python3 tools/headless_eval.py --seeds 1 --terrain flat --max-sim-s 60
+python3 tools/headless_eval.py --seed-list 7,11,23 --terrain flat --max-sim-s 60
+```
+
+`nandi_kpi.py` reports picks/hour, pick success rate (basket truth), drops, false grasp reports, verdict disagreements, falls, e-stops, interventions/hour, distance walked (from `tele/pose`), energy/pick (only with a `tele/batt` stream) and p50/p90 cycle time per phase. Every number is a row with `device_id`, `run_id` and `date`.
+
+`headless_eval.py` runs the real `farm_scene` world, `tripod_gait` and `HarvestSequence` in one process without ROS or a viewer (about 30-40x real time on 2 CPUs): it walks to the nearest crop, harvests, repeats until `--max-sim-s` of sim time, writes a normal run directory per (terrain, seed), and prints one I-EAR-05-style result row (`device_id, run_id, date, model_sha256, runtime, latency_ms, fps, watts, accuracy` plus harvest fields) per run. Its torque report comes from `data.actuator_force`. The full sweep (`--seeds 3 --terrain flat,ridges,rough --max-sim-s 300`) is a CI-runner job; on a laptop run one seed for at most 60 s.
+
+The physics loop is `atharv_nandi/core/sim_driver.py` (`SimDriver`, WP0b): one `MjData` stepping the gait, robot actuators, `atharv_nandi/sim/hooks` (`every_step` hooks and driver `add_substep` callbacks before every `mj_step`, rate hooks after it), task state machines (`add_task`) and observers, with no ROS. Task-layer tests (WP8, WP9, WP25 and later) drive the stack through it; `StubRenderer` keeps them at unit tier and `MjRenderer` renders the driver's own model under `gl`, from a free view (`View.look`) or a model camera (`View.of_camera("crown_cam")`, which rides the WP24 mast; `Capture.eye` is the camera position at render time). With no hook files the step sequence is the pre-WP0b one, so `headless_eval` results on a seed are unchanged (a run now ends exactly at `--max-sim-s`). Safe hold, reset and re-arm follow `sim_runner` (a reset never re-arms; `leave_hold` blends back to the targets); a physics blow-up raises `Diverged`; a hook fault ends a `headless_eval` run with `end_reason` `hook_fault` and the faults in the row and `events.jsonl`.
+
+### `kis/v1` mapping (`atharv_nandi/core/kis_mapper.py`, `atharv_nandi/nodes/telemetry_bridge.py`)
+
+Follows the Kisaanu `kis/v1` broker topic contract. Identity and the site origin live in `config/telemetry.yaml`; the tenant must start with `sim-` (the mapper refuses any other) and the origin is fictitious (0° N, 0° E).
+
+| Topic (`kis/v1/sim-nandi/sim-field-01/nandi-sim-01/...`) | From | Status |
+| --- | --- | --- |
+| `status` | bridge start/stop; last will `offline`, retained, 10 s will delay | contract |
+| `state` (retained, ≤ 8 KiB) | arm mode, gait, policy, `run_id`, safety; `fw` = version string | contract |
+| `tele/pose` (2 Hz) | `/nandi/sim_qpos`: local ENU (x east, y north, z up), lat/lon/alt via the site origin, yaw | **PROPOSED** (robot stream design) |
+| `tele/mission` (1 Hz + on change) | harvest/game status, `/nandi/mission_status` when present | **PROPOSED** (robot stream design) |
+| `tele/batt` | `/nandi/battery` when present (String JSON or `sensor_msgs/BatteryState`) | **PROPOSED** (robot stream design) |
+| `tele/detect` | `/nandi/crop_detections` when present | **PROPOSED** (robot stream design) |
+| `tele/harvest` | one finalised harvest attempt | **PROPOSED** (this repo only) |
+
+Section 3 of the broker contract requires a `tele/{other}` stream to be named there before use, and none of the robot streams is yet, so all of them are PROPOSED and not part of the contract. Every JSON payload carries `v`, `ts` (epoch ms), `ts_src`, `boot`, `seq` (per stream, from 0 on every boot) and `data_provenance`; `tele/*` payloads are limited to 16 KiB (the mapper raises above it). One stated deviation: `ts_src` is `"sim"`, which the broker contract does not define (it knows `ntp` and `boot`), so a simulated timestamp can never pass for an NTP one. The MQTT sink is off by default (`sinks.mqtt.enabled`); `paho-mqtt` is imported only when it is on, and the broker URL and credentials come from `NANDI_MQTT_URL` / `NANDI_MQTT_USERNAME` / `NANDI_MQTT_PASSWORD`, never from the repository.
+
+---
+
+## Perception (simulated cameras, ring pano, TREE 360 captures, LiDAR, privacy filter)
+
+`atharv_nandi/nodes/perception_node.py` gives the robot eyes. It keeps a private, never-stepped copy of the world (`atharv_nandi/core/camera_rig.py`), built through the same `farm_scene` builder as every other node, so `nq` and the qpos layout match. It adds `head_cam` and `wrist_cam`; the 4 ring cameras (`ring_0..3`, mast ring at 0.98 m, 25° down, fovy 83.6°) and `crown_cam` (crown head, fovy 60°, 7.2 mm/px at 1.5 m) come from the robot MJCF. The node applies `/nandi/sim_state` (qpos, mocap, eq_active and module mutations, so the raised crown and the WP24 gimbal show up), falling back to `/nandi/sim_qpos` in a world without it. The robot MJCF and `sim_runner`'s physics model are not changed. Everything except `main()` is ROS-free (`PerceptionCore`), so the tests drive it without ROS.
+
+* **`head_cam`**: on the trunk front, 0.35 m ahead of the trunk centre and 6 cm up. It looks forward, pitched down 35°, with fovy 70°.
+* **`wrist_cam`**: on the gripper (`arm_wrist`) body, looking along the gripper, with fovy 60°.
+* **Cameras render geom groups 0-4** (wood, fruit/actors, robot, foliage, decals), never 5 (query-only). MuJoCo's default shows only 0-2, which hid every canopy from the cameras before WP5.
+
+**Render scheduler** (`atharv_nandi/core/render_scheduler.py`): `register(camera, priority, modes)`, priority wrist > head > ring > crown > belly > rear > pano, a token bucket capping GL at **35 %** of one core (burst 0.3 s). Modes: `drive` (head 2 Hz, ring round-robin 2 cameras/s, crown 0.5 Hz, pano ≤ 1 Hz), `grip` (GRIP / CUT / TOOL_CHANGE: ring paused, wrist on), `tree360` (only the station cameras, capture requests only: RGB + depth + seg at 320 × 240, deferred but never dropped when over budget), `paused`. Every pass runs the **mjvScene camera-distance cull** (`atharv_nandi/core/scene_cull.py`): scene geoms more than 4 m from the camera are dropped after `update_scene` (people, animals, planes and height fields always kept), no model field is touched.
+
+**Ring pano** (`atharv_nandi/core/pano.py`): a numpy LUT gather into a 640 × 256 equirect strip, azimuth 360°, elevation −56…+5° (the computed band where every pixel is covered; the spec's −67…+17° leaves the corners uncovered off-axis), 5° feathered seams, self-masked pixels filled from the neighbouring camera or grey, sector ages on `/nandi/camera/pano/info`.
+
+**Self-masks** (`atharv_nandi/core/self_mask.py`): static per ring camera from a seg pass at the home pose (dilated 2 px), still covering every robot pixel at mast extension 0, 0.6 and 1.6 m; the crown camera's mask comes from its own capture's seg pass; plus the arm's projected hull per ring frame (pano and seen tracker).
+
+**LiDAR** (`atharv_nandi/core/lidar_model.py`, hook `atharv_nandi/sim/hooks/lidar.py` at 10 Hz in the sim process): mast LiDAR 3 × 360 rays (0, −15, −30°) and two 270° low safety planes at 0.18 m, σ 2 cm, 1.0-1.4 ms per 1,620-ray sweep on `orchard_lite`, about 4-5 ms on the `orchard_demo` hfield terrain (terrain rays are marched against the height grid with MuJoCo's cell triangles, same returns as `mj_multiRay` to 0.05 mm; `mj_multiRay` alone took 35-67 ms there). Safety rays use groups {0, 1} (never foliage), coverage rays {0, 1, 3}. Publishes `/nandi/scan`, `/nandi/scan_low` (LaserScan-shaped JSON), `/nandi/lidar/clusters` (non-map clusters for the privacy filter) and, on request, the **trunk fit** `/nandi/lidar/trunk_fit`: a circle fit on the low-plane hits around the registry tree (fixed registry radius, seeded by a sensor-facing fixed-radius RANSAC and trimmed at 4 cm so pruning sprouts touching the trunk are dropped, free-space constraint from the rays that passed the trunk, 10 scans), canopy-edge ellipse fallback. Measured on `orchard_lite` mango (scaffolds from ~0.6 m), 1-3 m both sides, 30 noise seeds: max centre error 1.69 cm, mean 0.54 cm; `orchard_demo` (robot level on the terrain, incl. the basin rim at 1.0 m), 17 trees × 1.0 / 1.5 / 2.2 m × both sides: max 1.40 cm except `tree_R4-4` from the south (23-24 cm, open item, caught by the cross-check). Each fit carries a **ring-depth band cross-check** (`cross_check`, OS 2.5): the ring cameras' pixel rays over the 0.2-0.5 m band ROI (re-cast at 2 Hz, depth σ 1 cm), a fixed-radius RANSAC + trimmed circle fit that drops the pruning sprouts touching the trunk, plus a free-radius fit (`free_radius`; `radius_mismatch` when it is more than 2 cm from the registry radius on a ≥ 100° arc, which catches a wrong registry radius that shifts both fixed-radius centres alike), `off_trunk` when its centre is more than r + 5 cm from both the prior and the low-plane centre (close beside the tree only a pruning sprout may be in view), and `agree` when its centre is within 3 cm of the low-plane fit and the radius matches (up to 2.5 m range; the band fit is cached with the 2 Hz cast). Measured on `orchard_lite` `tree_L1-1`, 1.0-2.5 m both sides, seeds 7/11/23: band centre error ≤ 0.77 cm, delta to the low-plane fit ≤ 1.50 cm, 24/24 agree; `orchard_demo`, 12 trees × 2 sides at 1.2 m: 24/24 agree, 4-7 ms per band cast; 204 fits over 17 trees: 200 agree (the 4 others flag the R4-4 primary); 0.45-0.65 m beside the tree: no false disagreement (`off_trunk` instead); wrong registry radius (0.09 for 0.055): 24/24 `radius_mismatch`. A rendered ring depth frame (`depth_band_points`) gives the same centre as the rays within 1.7 mm.
+
+**Privacy filter** (`atharv_nandi/core/privacy_filter.py`): every image leaves as a `FilteredFrame` through `FilteredSink`; raw arrays raise `PrivacyError` (also in `StripAssembler` and `Mp4Assembler`). Assisted mode masks the truth person boxes (dilated) and the LiDAR clusters (+20 %); physics mode the clusters only; boxes are clipped at the 0.3 m near plane and the front part masked; a near (or behind-the-camera) part that reaches the image drops the frame. Physics mode fails closed: without clusters from within 0.35 s of the rendered state the frame is dropped. The WP23 fruit pool is never a LiDAR person cluster. Panos and strips are gathered from FilteredFrame pixels only (`compose_gather` / `compose_pano`); frames are bytes-backed read-only. **Parcel mask**: pixels whose depth falls beyond the field `geofence` are grey (`parcel_pct`). Persons are bboxes to grey out, nothing else: no face, identity or re-identification features. MP4: H.264 with an `ffmpeg` on PATH, else Motion-JPEG in ISO-BMFF (the image has no ffmpeg).
+
+**Detectors.** `sim_truth_noise` (`atharv_nandi/core/detector_model.py`, pure numpy) on the head camera feeds `/nandi/crop_detections`, as before:
+
+1. It projects the true crop centres through a pinhole model.
+2. It drops crops outside the image or farther than 2.5 m.
+3. It drops crops hidden in the depth map (occlusion).
+4. It adds Gaussian position noise with σ = 1.5 cm + 1 % of range per axis.
+5. It misses 5 % of crops and adds 0.05 false positives per frame (Poisson).
+6. It assigns a confidence that falls with range and with distance from the image centre.
+
+`ColorBlob` (chromaticity threshold on the RGB already rendered, no extra GL pass) runs on filtered frames; at dusk / dawn every frame gets the lighting preset's noise (σ 8/255) and 3 px blur, and when ColorBlob's recall (checked against the projected truth: assisted) falls below 0.8 the node switches to the geometry detector and publishes one `/nandi/assist` request (the check runs on head frames at 1 Hz). A plant is **"seen"** with a ≥ 12 px bbox, not self-masked, in a ring or head frame within the last 10 s of its zone pass; `/nandi/perception/zone_pass` `end` emits one `nandi.inspect/1` record per plant on `/nandi/records/inspection`.
+
+Every parameter is in `config/perception.yaml`, and the RNG is seeded. The sha256 of that file goes out in every message, so a tuning change is visible downstream.
+
+| Topic | Type | Rate | Payload |
+| --- | --- | --- | --- |
+| `/nandi/crop_detections` | `String` (JSON) | 5 Hz (contract: ≤ 5 Hz) | `{"t": float, "frame": "trunk", "camera": "head_cam", "model": {"name": "sim_truth_noise", "sha256": str}, "detections": [{"id_hint": str, "xyz_trunk": [x, y, z], "conf": 0..1, "bbox_px": [u0, v0, u1, v1]}]}`. `xyz_trunk` is in metres in the trunk frame. `bbox_px` is in pixels of the 160x120 head image. Detections are sorted by confidence, with at most 32 per message, and the payload stays under 16 KiB. `id_hint` is a track id (`trk_<n>`) from a nearest-neighbour tracker that associates in the world (odometry) frame, so a track keeps its crop while the robot turns. False positives lie on random pixel rays, no deeper than the ground plane (`detector.fp_ground_z_m`). It is the crop body name only when `detector.oracle_ids: true` (debug; off by default). |
+| `/nandi/camera/{head,wrist,crown,ring_0..3}/compressed` | `sensor_msgs/CompressedImage` (JPEG) | head 2 Hz, ring 2 cameras/s, crown 0.5 Hz, wrist 2 Hz in `grip` | privacy-filtered frames; 160x120 (crown 320x240) |
+| `/nandi/camera/pano/compressed` + `/pano/info` | `CompressedImage` + `String` | ≤ 1 Hz | 640x256 pano (about 8 KB) + `{"ages": {ring: s}}` |
+| `/nandi/perception/tree360` → `/nandi/perception/capture_ack` | `String` (JSON) | per capture | `start` / `capture` / `stop` (`start` refused while `paused` / `grip`; `stop` never leaves a pause); the ack carries `gl_ms`, `ngeom` before / after the cull, `person_px`, `person_covered_pct`, `privacy_pct`, `parcel_pct`, `masked_pct` |
+| `/nandi/perception/mode`, `/nandi/perception/state` | `String` (JSON) | on demand / 1 Hz | scheduler mode in; mode, render fraction, skips, privacy counts out |
+
+**CPU cap.** Rendering is capped at `scheduler.budget_frac` 35 % of one core (was `node.render_budget_frac` 20 %, MVP-SPEC 3.8). llvmpipe is limited to one thread (`LP_NUM_THREADS=1`). Between GL passes, the last head depth map is reused only while neither the camera nor anything in front of it (gantry, arm, gripper, legs, crops; every qpos entry after the trunk free joint, within 5 mm or 5 mrad) has moved. Any frame that is over budget, or has a stale depth map, uses geometric projection only (no occlusion test). With `node.render: false` in `config/perception.yaml` the node never touches GL: detections still flow at 5 Hz, but there is no image and no occlusion. That mode suits a slow CPU or a machine with no GL.
+
+**Measured (WP5, 2026-11-17, 2-CPU / 2 GB `atharv-nandi-sim` sandbox container shared by `sim_runner`, `perception_node` and the probes, `orchard_lite`, not the CI runner).** `sim_runner` RTF mean 1.000 without `perception_node`; with it 0.991 (min 0.88-0.93) over 70-75 s. A 160 × 120 pass costs 90-180 ms here (llvmpipe, contended), so the 35 % budget gave head 1.7 Hz (129 renders, 6 skips), crown 16, ring 21 frames and 65 panos in 75 s; the ring needs passes ≤ ~90 ms for its full 2 cameras/s (MVP-SPEC 3.8 assumes ~75 ms). A TREE 360 station (3 captures: ring_1 low, crown 1.70 m / −10°, crown 2.70 m / −20°; RGB + depth 320 × 240 + seg 160 × 120) took 450-550 ms GL in 1.67 s wall, **render fraction 0.27-0.33 ≤ 0.35** (tight: the unit test can fail on a busier host); person coverage 100 % in every capture; trunk fit `R_meas` 3.20 m from home, live.
+
+**Measured before WP5 (2026-11-17, head camera only).** Test setup: Apple M5 host, Docker Desktop, one 2-CPU / 2 GB container running `sim_runner` and `perception_node` with the robot at home. Results:
+
+* `/nandi/crop_detections` ran at 5.00 Hz (`ros2 topic hz`: 4.998).
+* The image ran at 2.00 Hz.
+* Mean `|xyz_trunk − truth|` for `crop_item_1` was 3.29 cm over the first 20 frames and 3.21 cm over 192 frames (budget: < 4 cm).
+* `game_status` RTF was 1.000 / 0.999 / 1.001 for camera off / on / off.
+
+Mac GPU numbers, and what the Apple GPU can and cannot speed up, are in [`tools/mac_gpu/README.md`](tools/mac_gpu/README.md).
+
+**Orchard CPU budget spike (WP11a).** `tools/spike_demo_budget.py` builds the orchard stub and measures it section by section (`stub`, `physics`, `render`, `rays`, `viewer`, `ack`, `livestack`, `verdict`). The stub has 17 trees, nv 151, 63 equality rows and 10 mocap bodies. The tool also holds the mjvScene post-filter cull (`SceneCuller`: geoms more than 4 m from the camera are dropped, except people, animals and other actors; the model is not touched). The cull is a fidelity cut (`scene_cull_4m` in the assisted register). Results:
+
+* Locally, 3 captures × 3 passes (RGB+depth+seg, 320 × 240) per TREE 360 station ack in time at RTF 0.9, but only with the cull: at 3 passes, 24/24 acks inside 0.5 s sim with it and 19/24 without (the 2-pass no-cull result swings with host load). The ack test ran on an otherwise idle 2-CPU runner, without the live ROS nodes (about 0.9 cores), so WP11 re-measures it during a tour.
+* The stub's 3 rack tools are held by welds anchored at the tool (fixed at `97a86ef2f982`; before that they swung 1 m out), and importing the tool no longer sets `NANDI_TERRAIN` / `LP_NUM_THREADS` (only `main()` applies those defaults).
+* The binding render gate is a replay of `camera_rig.RenderBudget` (0.35, burst 0.3 s): no skips on a lightly loaded host, 1 skip in 3 on a contended one. The recommendation is to raise the burst to ≥ 0.4 s during TREE 360.
+* The passive viewer costs about 1 core, so it stays off in the demo profile.
+* CI-runner numbers are pending.
+
+The logic tests are in `tests/test_spike_demo_budget.py`.
+
+**Orchard tour benchmark (WP11).** `tools/spot_tour_bench.py` measures the real composed worlds and the orchard tour, one section per run, each JSON with a run id `wp11-<section>[-<tag>]-<utc>-<sha12>[-dirty]`, `device_id` and `tool_blob`: `world` (counts, physics and full-`SimDriver` ms/step, BADQACC, scene geoms after the 4 m cull, LiDAR sweep), `capture` (GL: culled TREE 360 captures at OT-1, the crown gimbal aimed at the trunk as TREE 360 aims it, and the `RenderBudget` replay), `tour` (one WP9 segment or a step list on `SimBackend`, per-step sim / wall / CPU and a 10 s sim RTF timeline; `--pace 0.9` wall-paces it like the demo), `live` (`launch_nandi.sh` plus `demo_tour_node.py`, a `/nandi/demo/run`, `/nandi/game_status` RTF and CPU per process) and `summary` (merges segments into the tour verdict: RTF, time gates and tour pass; a failed `live` run exits 2 and fails the summary RTF gate). Gates in `tests/test_world_budget.py` (unit tier for the worlds and the bench logic; `gl`; `slow` + `gl` ack; `tour` for the RTF of one segment). Locally every 10 s window of the tour holds RTF ≥ 0.9 with about 3-5× headroom and the paced sim_runner stays at ≈ 1.0 while a tour runs beside it, but the tour is longer than the 18 min sim / 20 min wall gates at the demo pace, and the culled capture p90 and the `RenderBudget` replay miss their gates on the real world. CI-runner numbers are pending.
+
+Both launchers start the node. To start it by hand in a running container (the container's working directory is `/ws`, so `-m` finds the package):
+
+```bash
+docker exec -it atharv-nandi bash -lc 'source /opt/ros/humble/setup.bash && python3 -m atharv_nandi.nodes perception_node'
+```
+
+### Orchard perception: LEAF SCAN, TRUNK/BASE SCAN, symptom leads, FRUIT SCOUT (WP26)
+
+`atharv_nandi/core/perception/` (ROS-free, MuJoCo-free logic; config `config/perception_orchard.yaml`, override path `NANDI_PERCEPTION_ORCHARD`) turns the WP23 tree plans into the perception parts of the TreeRecord. Every symptom output is a **lead** (`stage: lead`; `confirmed` only comes from the hub), and `next_actions[]` is only `revisit | tree360 | deep_scan | leaf_scan | trunk_scan | human_inspect | mark_jobs:<n>` (no treatment advice). Detection is **SimTruth** (assisted: the decal / fruit truth seen through a view model with seeded misses, confusions and false positives, labelled in every row); the RGB-only **ColorBlob** baseline is reported, never gated.
+
+* `leaf_scan.py`: leaf targets from the `leaf_k` leaf quads (never from decal truth), stratified over 4 azimuth quadrants × young / mature; upper side from above and a **no-contact underside** view from below (axis within 35° of the normal, z ≥ 0.2), stand-off 0.12-0.20 m; a wrist proxy capsule plus its straight 10 cm approach keeps **≥ 2 cm** from every leaf quad, decal, wood, prune target and fruit (`ClearanceGuard` latches a stop below 2 cm; base drift > 2 cm pauses for a re-approach). Leaves above 0.8 m get a crown view labelled `not_close_up`; papaya is `n/a_crown_only`; banana uses only in-band dead / drooping blades. Leads are colony/symptom level. Preconditions / interlocks (`check_preconditions`, also used by TRUNK SCAN) refuse with reason codes (`dwell_slope`, `wet_foliage`, `work_fields_not_clear`, `wrist_camera_fault`, `blade_not_locked_open`, `low_light` with a `dawn_mode` threshold, `sensor_invalid` for a NaN / inf reading: fails closed); per-side recovery: blur → retry 2, depth < min-Z → back off 3 cm (stand-off ≤ 0.20 m, ≤ 1.0 mm/px, lens ≥ 0.05 m and clearance re-checked), base drift > 2 cm → pause and re-approach, NaN depth / drift → `sensor_invalid`. Only an unreachable leaf (every side `no_clearance`) becomes a MARK `out_of_reach_marked`; a reachable leaf that was not imaged (blurred, drift, min-Z) goes to `revisit` with its side reasons. The config loader refuses an override that loosens an interlock (2 cm leaf / trunk clearance, 2 cm drift, blade tools T2 / T5, 1.0 mm/px, 24 h frames).
+* `trunk_scan.py`: wrist clearance ≥ 2 cm to wood, sprouts, fruit **and leaves** (as LEAF SCAN); 4 azimuths (2 alley-side ones for a hedgerow), ring low frame + portrait wrist close-ups at 0.2 / 0.5 / 0.8 m, 0.20 m off the bark; TreeRecord `trunk{frass, gum, collar_rot, mud_tubes, weevil_holes, band_ok, …}`; rootstock sprouts below `graft_union_h_m` become PRUNE flags. `run_trunk_block` is the `block_sample` mode (N trees per crop stratified N/E/S/W, % trees affected).
+* `pest_detect.py`: the seasonal class catalogue per crop (mango sooty mould, powdery mildew, anthracnose, malformation, webber, mealybug, shoot gall, stem-borer frass, gummosis, hopper honeydew (distance frames only); guava wilt, fruit fly, bark-caterpillar webbing, canker, mealybug; papaya PRSV, leaf curl, collar rot, mealybug; banana Sigatoka (graded), bunchy top, weevil gum), view geometry, lead detectors, per-unit aggregation (% leaves / shoots / panicles affected, trunk present), **block sampling plans** (N trees stratified N/E/S/W, N from the crop), the record fragment and `kpi_report`.
+* `fruit_track.py` + `ripeness.py`: 8 TREE 360 stations × low / mid / high frames; detections lifted with depth into the **tree frame**, associated per frame (Mahalanobis gate under ray-aligned depth noise, or within `dedupe_radius_m` 0.04) and triangulated, so each fruit counts once; stage per crop (**mango: shoulder rise + stem-end colour + days since fruit set, never skin colour**; guava skin colour; papaya colour-break streaks; banana ribbon age, finger angularity secondary); size from depth in the low band (coarse above); reachable vs MARK (`out_of_reach_marked`, `pole_picker`); bagged mango: bags counted, stage from the calendar, HARVEST refused (`bagged`); harvest window per tree (registry date, else stage distribution, else UP calendar) and per block; block yield is a labelled estimate. Reused frames older than 24 h fall back to one lap (crown gate green) or refuse `frames_stale`; the gate state must be passed (`crown_gate_ok=True`; unknown → `crown_gate_unknown`, unknown / NaN frame age → `frames_age_unknown`).
+
+Numbers (capped sim runner, seed 7, not a KPI run): `python3 -m atharv_nandi.core.perception.pest_detect --report orchard_demo` gives LEAF SCAN lead recall 18/18, imaged 100 %, underside 100 %, 0.72 mm/px, median 7.9 s/leaf, min clearance 4.5 cm (MuJoCo `mj_geomDistance` of the swept proxy agrees); TRUNK SCAN recall 26/26; canopy leads 45/45; FRUIT SCOUT count error 1.4 % aggregate over 8 views and 4 seeds (2 of 52 tree runs above 10 %, max 11.1 %), stage accuracy 1.0 SimTruth (ColorBlob 0.50 on mango, 1.0 on guava / papaya), low-band size MAE 1.2 mm, harvest window = truth 68/68. GL: a 12 mm leaf decal spans 14.8-17.3 px on the rendered 320 × 240 wrist frame. Tests: `tests/test_{leaf_scan,trunk_scan,pest_detect,fruit_track}.py`. Not wired to ROS topics or the console yet (WP9 / WP10 / WP27 consume these modules).
+
+### TREE 360 VIDEO: orbit planner and recorder (WP25)
+
+One TREE 360 visit orbits one registry tree at r1 = canopy_r + d (stand-off d lens to canopy, default 0.9 m; OT-1: 1.9 m), CCW with the tree on the left, and records pose-tagged keyframes per band. Code: `atharv_nandi/core/orbit.py` (planner, closed-loop controller), `atharv_nandi/core/coverage.py` (band planner per tree, coverage), `atharv_nandi/core/tree360.py` (the run and recorder), hook `atharv_nandi/sim/hooks/tree360.py`.
+
+* **Full or two-sided.** Full only where the annulus is clear in the registry and the LiDAR clusters (OT-1); otherwise one arc per alley side that stops 0.3 m (+ 0.1 m planning tolerance) short of the neighbour canopies, with an A* transit around the row end between them, and `gap_deg` reported. Coverage is measured, never extrapolated.
+* **Bands per tree** (`plan_bands(d)`): low = tree-side ring camera (0.98 m, incl. the trunk base), mid = crown 1.70 m at −10°, high = crown 2.70 m at −20°, tilts re-solved when they would not give ≥ 0.3 m overlap up to 2.8 m. At d 0.9 / 1.2 / 1.5 m the defaults cover 0-2.86 / 2.91 / 2.96 m.
+* **Stations** (8): settle, gimbal to the trunk bearing, capture low + the current crown band, the crown **snakes** to the other band (one 5 s move per station, the crown stays up on the arcs), capture. `stop_and_go` (crown to 0 before every arc) is used when WP6 refuses crown-up walking on the arcs (basin rims, tripod margin, wind).
+* **Closed loop**: `omega = v/R_cmd + k_r (R_meas − R_cmd) + k_b (bearing_err − atan(0.30/R))` at 0.15 m/s with R_meas from the WP5 low-plane trunk fit (physics) or truth (assisted, labelled); > 0.15 m error slows to 0.10 m/s, > 0.30 m stops and re-enters at the nearest station (2 ×), then marks a gap.
+* **Interlocks**: a person in the crown-scaled warning field pauses the orbit (all timers frozen) until clear, assist after 30 s, halt after 120 s; the console Pause / Resume freezes it the same way without the person timers. While WP6 inhibits walking the robot stands (snake: stow after 2 s and go on stop-and-go; halt `stability` after 30 s). A protective / stability latch, the e-stop, a fall, an operator abort, a walk that does not arrive (`approach_timeout`, `reentry_timeout`, `transit_timeout`; trunk off the entry station before the raise: `approach_off_station`), low light (`low_light`), the arm off PARK (`arm_not_parked`), a world reset (`world_reset`) or an internal fault (`internal_error:<type>`) halts it, ordered: stand, stow the crown and wait for it, release the preset source, partial media sealed. Free disk below 1.5 × 26 MB records Hybrid (stills only, no depth, no MP4); below 1.5 × 2 MB the visit is refused (`disk_low`).
+* **Outputs** under `runs/<run_id>/tree360/<tree_id>/`: `<band>/<seq>.jpg` (privacy-filtered) + `<seq>_depth.png`, `frames.jsonl` (pose tags), `strip_<band>.jpg`, `<band>.mp4`, `coverage.json`, `plan.json`, `manifest.json` (SHA-256 per chunk, Merkle root); `record_<tree_id>.json` (`nandi.tree/1` coverage + media) beside it, published on `/nandi/tree/record`. `deepscan_<tree_id>.json` (`nandi.deepscan/1`, on `/nandi/deepscan/request`) only when the visit is done **and** its coverage passes; otherwise `next_actions` is `[revisit, tree360]`. With `capture: perception` (the live default) the record is labelled `capture_perception_remote` and `coverage_geometry_only`.
+
+Start a visit: in-process `hooks.tree360.start(bus, m, d, "OT-1", params, gait=driver.gait)`; over ROS `/nandi/tree360/cmd` `{"cmd": "start", "tree_id": "OT-1", "params": {...}}` / `{"cmd": "abort"}` / `{"cmd": "pause"}` / `{"cmd": "resume"}` (`params.out_root` is refused over the topic: outputs go under `NANDI_RUNS_DIR`; `run_id` and `device_id` must be one safe path segment), progress on `/nandi/tree360/progress` (2 Hz). In the live `sim_runner` the hook cannot drive the gait: it publishes `/nandi/tree360/drive` for a cmd_vel bridge that is still a change request (WP27 / WP10), so the full visit currently runs in-process (tests, tools); a topic-started walking entry in the live runner halts `approach_timeout` instead of raising the crown at home.
+
+**Measured (2026-11-18, capped runner, orchard_demo, physics radius):** OT-1 snake orbit 156.4 s sim (gate 165), radius RMS 0.025 m flat and 0.026-0.027 m on rough ground with basins (seeds 7 / 11 / 23), coverage low / mid / high 100 / 100 / 95.8 %, 0 falls, 1.03 MB per tree with GL captures; the scripted worker paused the orbit 10.0 s, 0 unmasked person pixels; hedgerow R1-2 two-sided (stop-and-go) ≥ 120° per side and band, closest neighbour canopy 0.36 m from the hull.
+
+---
+
+## Tests
+
+Unit tests in `tests/` exercise the pure modules in `atharv_nandi/core/` and never import ROS. Run them in the sim image:
+
+```bash
+docker build -t atharv-nandi-sim -f docker/Dockerfile .
+docker run --rm -v "$PWD:/ws" -w /ws atharv-nandi-sim python3 -m pytest -q
+```
+
+or directly on any Python 3.10+ machine without ROS (the sim image runs Python 3.10.12, so tests must stay 3.10-compatible; the "Python 3.11" in the work-package rules does not describe the image, see [docs/test-plan.md](docs/test-plan.md) section 1; `ompl` is optional, and without it the OMPL-backend planner tests skip and the planner uses its pure-Python RRT-Connect):
+
+```bash
+pip install -r requirements-ci.txt
+python -m pytest -q
+```
+
+Test tiers (`pytest.ini`, `--strict-markers`): unmarked tests are the unit tier (headless, ROS-free, ≤ 10 s each); `gl` needs an offscreen GL backend and skips without one; `slow` (≤ 3 min each, nightly), `tour_lite` (every PR), `tour` (nightly, seeds 7/11/23) and `readiness` (before a demo). Per PR: `pytest -m "not slow and not tour and not readiness"`. Coverage (`.coveragerc`, needs `pytest-cov`): `pytest --cov --cov-config=.coveragerc`, gate ≥ 85 % line / ≥ 75 % branch on `atharv_nandi/core/`. Heavy runs go to a CI runner. On `feat/nandi-pilot` @ 1840118 the unit-tier selection is 103 files (with `tests/test_wp12_docs.py`): 2,757 passed, 1 failed (the WP11 LiDAR-sweep timing gate on a contended host), 25 skipped, 6 xfailed, 53 deselected (capped runner, file by file; [docs/test-plan.md](docs/test-plan.md) section 5). `tests/test_wp12_docs.py` keeps the docs in step with the code (contract fold-in, assisted register, beacon map, state tables). After the WPR restructure (capped runner, file by file, every file of `tests/`): 2,802 passed, 30 skipped, 5 xfailed = the pre-restructure 2,770 / 30 / 5 plus the 32 tests of `tests/test_package_layout.py`; `tests/test_tour_demo.py` (tour tier) and the full `tests/test_world_budget.py` exceed the 180 s cap in both trees, and `test_world_budget.py` run test by test gives the same results before and after (the LiDAR-sweep timing gate flips on a contended host either way). Tests import the package because `pytest.ini` sets `pythonpath = .`; nothing edits `sys.path`.
+
+Coverage and interlock mutation (WPCOV): `python3 -m pytest -p pytest_cov --cov --cov-config=.coveragerc --cov-report=json:cov.json` then `python3 tools/coverage_gate.py cov.json` prints the per-module table and gates line ≥ 85 % **and** branch ≥ 75 % on `atharv_nandi/core/` (plus line ≥ 90 % for each new module passed with `--new`) (coverage.py alone has one combined `fail_under`). Measured in the capped runner on `feat/nandi-wpcov`: unit tier 90.90 % line / 84.79 % branch, unit + `slow` 93.08 % / 87.18 % (`tests/test_tour_lite.py` excluded: it exceeds 180 s under tracing). `tests/test_interlock_mutation.py` (`slow`, nightly) disables each of the 25 safety interlocks listed in `tests/interlock_mutants.py` (blade close, tool change, stability gates, protective field, geofence, noVNC + actors, e-stop re-arm and confirmations, fall, speed cap, orbit pause, animal stop, follow-tag loss, transfer, RTK, ...) through `NANDI_MUTANT=<name>` and fails unless a guard test fails; all 25 are caught. Each mutant must disable code the product runs (a unit-tier ast check; `bunch_exclusion` is the one listed exception, it has no live caller yet), and each guard set must pass without a mutant first. Details and the review fixes: [docs/test-plan.md](docs/test-plan.md) section 5.1.
+
+---
+
+## Training the RL Balance Policy
+
+The trained policy archive is **not** included in the repository (`rl_training/models/*.zip` is git-ignored). Train it with:
+
+```bash
+docker/train.sh
+```
+
+This builds `atharv-nandi-train` (the sim image plus CPU PyTorch, Stable-Baselines3 and Gymnasium) and runs `rl_training/train_nandi_balance.py` headless with the repository mounted. The trainer runs 4 parallel MuJoCo workers for 1.2 M timesteps, saves a checkpoint every 100 k total steps as `rl_training/models/nandi_balance_<steps>_steps.zip`, resumes automatically from the newest checkpoint, and writes `rl_training/models/nandi_balance_final.zip` at the end.
+
+> **Training is heavy.** Expect hours of sustained load on all cores. Run it on a Linux workstation, a GPU box or a cloud VM rather than a laptop, then copy the resulting `.zip` into `rl_training/models/` on the machine that runs the sim. It runs fine unattended (`nohup docker/train.sh > train.log 2>&1 &`).
+
+The training environment loads the raw robot MJCF (`atharv_nandi/sim/models/AtharvNandi/atharv_nandi.xml`), and the runtime observation builder only reads the robot part of `qpos` (`[0:32]`), so a policy trained here works unchanged in the multi-crop farm world. The policy observes the arm end point through the invisible site `policy_tip` (0.065 m from the wrist pivot, where `gripper_tip` was before the harvest gripper was lengthened to 0.105 m), so archives trained before that change still get the observation they were trained on; note the arm itself is slightly heavier at the end (palm moved out, stiffer fingers), and since WP1 the whole robot is 2.6 kg heavier with a 2.4 kg crown mast at the rear; no policy has been re-evaluated against either.
+
+`docker/train.sh <command>` runs any other command in `rl_training/` with the training image, e.g. `docker/train.sh python3 train_nandi.py` for the 18-DOF leg-only policy.
+
+### Running the Sim with the Policy
+
+```bash
+docker/run_rl.sh
+```
+
+Same UI and ports as `docker/run.sh`, but on the training image so the locomotion node can load the policy (it prefers `nandi_balance_final.zip`, else the newest checkpoint). Press **Switch Gait** (`G`) to enable RL mode. To watch the push-recovery evaluation viewer, run `docker/run_rl.sh shell`, open the noVNC desktop and start `cd /ws/rl_training && python3 evaluate_nandi_balance.py`.
 
 ---
 
 ## Repository Structure
 
-```text
-ros2_work_space/
-├── requirements.txt                         # Python dependencies (MuJoCo, Gymnasium, SB3)
-├── README.md                                # System overview, architecture, and usage guide
-├── sim/
-│   ├── models/
-│   │   ├── KisaanuNexusFarmDog6/
-│   │   │   └── kisaanu_nexus_farm_dog6.xml  # 25-DOF hexapod + dorsal gantry/arm MJCF
-│   │   └── unitree_a1/                      # Baseline quadruped MJCF reference
-│   ├── controllers/                         # Pure Python logic decoupled from ROS 2 nodes
-│   │   ├── tripod_gait.py                   # 18-DOF alternating tripod gait generator
-│   │   ├── rl_balance_policy.py             # 23-DOF PPO inference & 84-D obs builder
-│   │   ├── arm_ik_solver.py                 # Damped Least-Squares Jacobian IK solver
-│   │   └── ros_client.py                    # Async ROS 2 service & topic client bridge
-│   ├── work_envelope_service.py             # Model-agnostic 3D workspace ROS 2 service
-│   ├── locomotion_service.py                # Thin ROS 2 node (RL Policy ↔ Tripod Gait)
-│   ├── harvest_ik_service.py                # Thin ROS 2 node (RL Balance ↔ IK Harvest)
-│   ├── sim_runner.py                        # MuJoCo physics host & 3D wireframe renderer
-│   ├── control_panel_gui.py                 # Compact Tkinter operator console view
-│   └── launch_farmdog6.sh                   # One-command launcher for services + GUI
-├── src/
-│   └── quadruped_controller/                # ROS 2 Humble ament_python controller package
-└── rl_training/
-    ├── models/
-    │   └── farmdog6_balance_final.zip       # Trained 23-DOF PPO balance & walking policy
-    ├── disturbance_manager.py               # Uneven farm ridges + lateral push disturbances
-    ├── balance_reward.py                    # Rest-pose enforcement & arm-support reward
-    ├── farm_dog6_balance_env.py             # 23-DOF whole-body Gymnasium environment
-    ├── train_farm_dog6_balance.py           # Thread-safe 4-worker PPO trainer (WSL 2 ready)
-    ├── evaluate_farm_dog6_balance.py        # Camera-tracking MuJoCo push-recovery viewer
-    ├── terrain_manager.py                   # 18-DOF leg-only uneven ridge randomizer
-    ├── reward_functions.py                  # 18-DOF locomotion reward & fall check
-    ├── farm_dog6_env.py                     # 18-DOF leg-only Gymnasium environment
-    ├── train_farm_dog6.py                   # 18-DOF PPO trainer
-    └── evaluate_farm_dog6.py                # 18-DOF camera-tracking evaluation viewer
-
-Modular ROS 2 Service & Controller Architecture
-
-All kinematics, gait math, RL inference, and client networking reside in sim/controllers/, keeping the ROS 2 service nodes compact:
-
-1. 
-
-Node / Module                 
-
-sim_runner.py
-
-
-Interfaces (Topics & Services)          
-
-Publishes /farmdog6/sim_qpos
-
-Subscribes /farmdog6/leg_targets, /farmdog6/arm_targets, /farmdog6/workspace_wireframe
-
-
-Functionality
-
-Steps MuJoCo physics at 500 Hz, syncs the 3D viewer, and renders dynamic body-attached workspace wireframes.
-
-
-2.
-
-Node / Module
-
-locomotion_service.py
-
-
-Interfaces (Topics & Services)
-
-Services /farmdog6/stop_motion, /farmdog6/toggle_locomotion_mode
-
-Publishes /farmdog6/leg_targets, /farmdog6/rl_arm_targets
-
-
-Functionality
-
-Delegates to RLBalanceController (23-DOF PPO) or TripodGaitGenerator (18-DOF tripod) and toggles live via ROS 2 Trigger.
-
-
-3.
-
-Node / Module
-
-harvest_ik_service.py
-
-
-Interfaces (Topics & Services)
-
-Service /farmdog6/auto_harvest
-
-Subscribes /farmdog6/rl_arm_targets, /farmdog6/manual_arm
-
-Publishes /farmdog6/arm_targets
-
-
-Functionality
-
-Arbitrates arm ownership: forwards tucked/stabilizing RL arm commands while walking and hands off to DorsalArmIKSolver when harvesting.
-
-4.
-
-Node / Module
-
-work_envelope_service.py
-
-
-
-Interfaces (Topics & Services)
-
-Service /compute_work_envelope
-
-
-Functionality
-
-Dynamically introspects MJCF manipulator joints and limits on demand to compute a translucent 3D reachability wireframe.
-
-
-
-5.
-
-Node / Module
-control_panel_gui.py
-
-
-Interfaces (Topics & Services)
-
-Uses FarmDog6ROSClient (controllers/ros_client.py)
-
-
-Functionality
-
-Compact Tkinter UI providing tap/hold D-pad movement, Switch Gait (RL ↔ Tripod) toggle, Auto-Harvest, workspace envelope controls, and manual joint sliders.
-
-
-Installation & Setup (Ubuntu 22.04 / WSL 2)
-
-1. Install System & ROS 2 Dependencies:
-
-sudo apt-get update && sudo apt-get install -y python3-tk
-
-2. Install Python Packages:
-
-cd ~/ros2_work_space
-pip3 install -r requirements.txt
-
-3. Build ROS 2 Workspace Packages:
-
-cd ~/ros2_work_space
-PYTHONNOUSERSITE=1 colcon build
-source install/setup.bash
-
-Running KisaanuNexusFarmDog6
-
-1. Launch the Live ROS 2 Simulation & Operator Console
-
-~/ros2_work_space/sim/launch_farmdog6.sh
-
-
-Locomotion & Gait Toggle: Tap ▲ Forward, ▼ Backward, ◄ Left, or Right ► for a single step, or hold to walk continuously. Click 🤖 Switch Gait (RL ↔ Tripod) anytime to toggle between the trained 23-DOF PPO balance policy and the deterministic 18-DOF tripod gait.
-
-Autonomous Harvesting: Walk within 1.08 m of crop_item_1 and click 🌾 Auto-Harvest (IK Pick & Basket) to switch the dorsal arm from RL balance mode to Jacobian IK pick-and-place, deposit the crop into the top basket, and hand control back to the RL policy.
-
-Dynamic Work Envelope: Click 🔄 Compute Envelope to project the 3D reachability wireframe into the live simulation, and 👁 Show/Hide to toggle visibility.
-
-Train or Evaluate the 23-DOF Arm-Assisted Balance Policy
-
-cd ~/ros2_work_space/rl_training
-python3 train_farm_dog6_balance.py
-LIBGL_ALWAYS_SOFTWARE=1 python3 evaluate_farm_dog6_balance.py
-
-
+The repository is one ROS 2 **ament_python package, `atharv_nandi`** (WPR): `package.xml`, `setup.py`, `setup.cfg` and `resource/atharv_nandi` at the root. Code imports it as a package (`from atharv_nandi.core import ...`); nothing edits `sys.path` (`tests/test_package_layout.py` checks it).
+
+| Path | What |
+| --- | --- |
+| `atharv_nandi/core/` | ROS-free logic: controllers, planners, perception (`perception/`), tasks (`tasks/`), tools (`tools/`), motion planning (`planning/`), HAL (`hal/`), workflow runtime (`workflow/`). Was `sim/controllers/` and `sim/workflow/` |
+| `atharv_nandi/sim/world/` | World composition (`compose.py`, ORDER, `world_id`) and one world module per work package (`modules/`). Was `sim/world/` |
+| `atharv_nandi/sim/hooks/` | Per-step hook registry (`__init__.py`) and hook files per work package. Was `sim/hooks/` |
+| `atharv_nandi/sim/models/` | MJCF: `AtharvNandi/atharv_nandi.xml` (robot), `atharv_nandi_v1.xml` (frozen WP0 oracle, never edit), `tools/` (T2/T4/T5), `unitree_a1/` (reference). Package data |
+| `atharv_nandi/nodes/` | Thin rclpy nodes, one console entry point each (`entry.py`: executable → node name; `python3 -m atharv_nandi.nodes <node>`). Was `sim/*.py` |
+| `atharv_nandi/web/` | Browser operator console (Three.js r160 vendored in `atharv_nandi/web/vendor/`, offline). Package data. Was `web/` |
+| `atharv_nandi/paths.py` | Where `config/`, `runs/`, models and web assets live (source tree, or `share/atharv_nandi` when installed) |
+| `atharv_nandi/node_params.py` | Declared ROS parameters of every node (each mirrors one `NANDI_*` env var) |
+| `atharv_nandi/launch_plan.py` | Node table, start stages and restart policy shared by both launchers |
+| `launch/nandi.launch.py` | `ros2 launch atharv_nandi nandi.launch.py` bringup |
+| `launch/launch_nandi.sh` | Bash bringup (default of `docker/start.sh`), same table and policy |
+| `sim/launch_nandi.sh` | Shim for images built before WPR (their baked `start.sh` runs it) |
+| `config/` | `nandi.yaml` (ROS params file), `safety.yaml`, `hal.yaml`, `perception*.yaml`, `telemetry.yaml`, `fields/`, `trees/`, `crops/`, `presets/`, `season/`, `missions/`, `workflows/`, `crown_gates.json`. Installed to `share/atharv_nandi/config/` |
+| `docker/` | `Dockerfile` (atharv-nandi-sim: ROS 2 Humble + MuJoCo + Xvfb/noVNC, `PYTHONPATH=/ws`), `Dockerfile.train`, `run.sh`, `run_rl.sh`, `train.sh`, `start.sh` |
+| `tools/` | Dev tools, not installed (feasibility sweep, crown gate matrix, KPI, benches, probes, `ros_launch_smoke.sh`, `coverage_gate.py`); a package, run with the repo root on `PYTHONPATH` |
+| `tests/` | ROS-free pytest suite (`pytest.ini` puts the repo root on `sys.path`) |
+| `rl_training/` | Gymnasium environments, PPO trainers and viewers (scripts; `models/` git-ignored) |
+| `docs/` | Pilot design set (architecture, state machines, safety, tests, fidelity, HAL, runbook) |
+
+### Build, launch and parameters (WPR)
+
+```bash
+# from a source tree (the dev container mounts it at /ws; the image sets PYTHONPATH=/ws)
+launch/launch_nandi.sh                                   # bash supervisor (docker/start.sh default)
+ros2 launch launch/nandi.launch.py gui:=false            # the same bringup through ros2 launch
+NANDI_LAUNCH=ros2 docker/run.sh                          # container started with ros2 launch
+
+# as an installed ament package
+colcon build --base-paths /ws && source install/setup.bash
+ros2 launch atharv_nandi nandi.launch.py params_file:=/path/to/nandi.yaml
+ros2 run atharv_nandi web_bridge --ros-args -p web_port:=8090
+```
+
+Executables (`ros2 run atharv_nandi <x>`): `sim_runner`, `web_bridge`, `locomotion_service`, `harvest_ik_service`, `stability_monitor`, `safety_supervisor`, `mission_executor`, `perception_node`, `telemetry_bridge`, `run_recorder`, `work_envelope_service`, `control_panel_gui`, `demo_tour_node`. Both launchers start the same nodes in the same stages (services and pilot nodes; 1 s later `sim_runner` and `web_bridge`; 1 s later the Tk console), end the stack when `sim_runner` exits, restart any other node after a crash (3 times, budget back after 60 s up; a clean exit is not restarted) and delete the e-stop latch file only at a fresh start, so a supervisor restart keeps the latch.
+
+Parameters: every node declares one string parameter per `NANDI_*` env var it uses (`atharv_nandi/node_params.py`; world, seed, terrain and the other shared knobs under `/**`, node knobs such as `web_port` under the node), loaded from `config/nandi.yaml` by both launchers. A set env var still wins; a non-empty YAML value is used otherwise; an empty value keeps the code default, and the shipped file is all empty, so it changes nothing. `ros2 param get /nandi_web_bridge web_port` shows the effective value. Console tokens and MQTT credentials are never parameters (env only, no default), nor is `NANDI_NOVNC_UP` (the privacy lock-out decision `docker/start.sh` exports). A YAML mapping, or any list for `wind` / `weather` / `gnss` / `link`, is exported as JSON (`wind: {"speed_mps": 3}` or `-p wind:={"speed_mps": 3}`); a flat list as a comma list. A fresh stack clears the e-stop latch the supervisor will use: a set `NANDI_ESTOP_STATE`, else `estop_state` from the params file, else `/tmp/nandi_estop_latch.json`.
+
+Smoke test (capped runner, image `atharv-nandi-sim`): `tools/ros_launch_smoke.sh build` (colcon build into `/ws/.colcon`), then `tools/ros_launch_smoke.sh launch installed|source|bash`: 20 s headless launch, every node in `ros2 node list`, `ros2 param list` per node, `/healthz`, and an operator e-stop that is still latched after `pkill` restarts `safety_supervisor`.
+
+---
+
+## Native Setup (without Docker)
+
+On Ubuntu 22.04 with ROS 2 Humble installed (`ros-humble-ros-base` plus `geometry_msgs`, `std_msgs`, `std_srvs`, `sensor_msgs`):
+
+```bash
+sudo apt-get install -y python3-tk
+pip3 install "numpy>=1.24,<2" "mujoco>=3.3,<3.4" "websockets>=13.1,<14"
+# optional, for RL mode and training: pip3 install torch stable-baselines3 gymnasium
+source /opt/ros/humble/setup.bash
+launch/launch_nandi.sh                       # from the checkout (it puts the repo root on PYTHONPATH)
+# or build and install the ament package:
+colcon build && source install/setup.bash && ros2 launch atharv_nandi nandi.launch.py
+```
+
+Keep NumPy below 2: ROS 2 Humble's Python bindings are built against NumPy 1.x.
+
+The web console has no login, so natively it listens on `127.0.0.1` only. To reach it from another machine set `NANDI_WEB_HOST=0.0.0.0` and list the hostname you browse to in `NANDI_WEB_ALLOWED_HOSTS` (comma-separated); browsers using any other hostname are refused, which also blocks DNS-rebinding pages. Docker already sets `NANDI_WEB_HOST=0.0.0.0` inside the container and publishes the port on `127.0.0.1`.
+
+## License
+
+Apache License 2.0, see [LICENSE](LICENSE). The bundled Unitree A1 reference model in `atharv_nandi/sim/models/unitree_a1/` keeps its own license.

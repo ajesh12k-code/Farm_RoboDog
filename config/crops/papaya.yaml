@@ -1,0 +1,47 @@
+# Atharv Nandi crop profile: papaya (Red Lady class). WP23, ORCHARD-MVP-SPEC 4.4. Schema nandi.crop_profile/1.
+# Project decision OQ-01 A: papaya is scout + MARK only in the MVP. The twist profile below stays so the
+# OS 1.2 step 8 demonstration and the WP2 twist tests have a configured target; mvp_scope gates production use.
+schema: nandi.crop_profile/1
+crop: papaya
+cultivars: [Red Lady]
+default_cultivar: Red Lady
+mvp_scope: scout_mark
+priority: 3
+harvest_method: twist           # MISSION-PRESETS 5: TWIST (T4), one per trip, jaw_clearance
+methods: [twist]
+tool: T4
+pool_kind: weld
+one_round: false
+one_per_trip: true
+pull_release: false
+pedicel_leave_cm: {default: 0.0, min: 0.0, max: 0.0}
+tau_detach_nm: 0.3              # WP23 sweep: a 2 N tangential brush peaks at 0.114 N.m about the stem axis; 2x margin -> 0.3 (OS 3.4 placeholder was 0.15)
+twist_min_roll_deg: 30
+jaw_clearance_mm: 15            # jaw 0.16 m + 15 mm per side clear of trunk and neighbours
+placement_speed_max_m_s: 0.5    # OS 1.2 step 8
+mass_kg: [1.0, 1.8]             # (assumption) inside handbook 0.8-1.2 / vendor 1.5-2.0 kg (cited)
+skin_colour_cue: true
+maturity_cues: [colour_break_streaks]
+offrobot_checks: []
+stages:
+  - id: immature
+    harvest: false
+    days_since_fruit_set: [0, 149]
+    cues: {orange_streaks: 0}
+    rgba: [0.28, 0.55, 0.20, 1.0]
+  - id: colour_break
+    harvest: true
+    days_since_fruit_set: [150, 190]   # (assumption)
+    cues: {orange_streaks: [3, 5]}     # colour break, 3-5 orange streaks (cited, HortScience 56/11)
+    rgba: [0.92, 0.62, 0.15, 1.0]
+harvest_window: {basis: colour_break, days: [150, 170]}
+bagging: {used: false}
+calendar_up: {}
+prune: {max_stem_mm: 12, paste_required_mm: 12, window_months: [], jobs: []}
+min_functional_leaves: null
+leaf_scan: crown_only           # no leaves in the pick band
+symptoms:
+  - {class: prsv, unit: per_leaf, bands: [high], seasons: [all], scale: canopy}
+  - {class: leaf_curl, unit: per_leaf, bands: [high], seasons: [all], scale: canopy}
+  - {class: collar_rot, unit: trunk, bands: [low], seasons: [all], scale: trunk}
+  - {class: papaya_mealybug, unit: trunk, bands: [low, mid], seasons: [all], scale: trunk}

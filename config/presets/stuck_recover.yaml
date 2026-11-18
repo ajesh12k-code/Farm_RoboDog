@@ -1,0 +1,33 @@
+# RECOVERY: STUCK / SINK (MISSION-PRESETS 8): stop -> back up 0.2 m -> retry with step height x1.5 ->
+# alternative heading +-30 deg -> assist. Crown stowed; fields active.
+schema: nandi.preset/1
+id: stuck_recover
+mode: stuck_recover
+version: 1
+kind: recovery
+title: "STUCK / SINK recovery"
+season: recovery
+crops: [mango, guava, papaya, banana]
+targets: [none]
+crown: none
+weather: exempt
+slope_limit_deg: 5.0
+ready: {relax: [energy, season, weather, disk, novnc, rtk, cloud_link]}
+params:
+  backup_m: {default: 0.2, min: 0.1, max: 0.5}
+  step_height_factor: {default: 1.5, min: 1.0, max: 2.0}
+  alt_heading_deg: {default: 30.0, min: 10.0, max: 45.0}
+  v_mps: {default: 0.1, min: 0.05, max: 0.18}
+preconditions: [ready_common, crown_stowed]
+steps: ["stop", "back up 0.2 m", "retry with step height x1.5", "alternative heading +-30 deg", "assist"]
+interlocks: [crown_stowed, fields]
+outputs: [recovery_record]
+kpis: [recovered_80pct_recovery_demo]
+retry: {attempts: 2, then: assist}
+gates:
+  - {kind: walk, ext_m: 0.0, v_mps: $v_mps}
+estimate:
+  fixed_s: 30.0
+  walk_m: "2 * backup_m + 1.0"
+  v_mps: $v_mps
+console: {tile: "STUCK", icon: stuck, hi: "फँसा", en: "Stuck / sink", order: 32, group: recovery, show: []}

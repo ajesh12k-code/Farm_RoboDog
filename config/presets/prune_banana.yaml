@@ -1,0 +1,46 @@
+# CLIP / PRUNE banana (MISSION-PRESETS 6): banana_tidy (dead blade dangling into the band, cut at the band) + MARK
+# sanitation deleaf / desucker (human jobs; the MARK planner keeps >= min_functional_leaves green leaves).
+schema: nandi.preset/1
+id: prune_banana
+mode: prune_tree
+version: 1
+kind: contact
+title: "PRUNE banana (tidy + MARK deleaf / suckers)"
+season: prune_banana
+crops: [banana]
+targets: [tree_ids]
+crown: none
+weather: contact
+slope_limit_deg: 3.0
+method: prune
+tool: T5
+params:
+  jobs: {default: [banana_tidy, banana_sanitation_deleaf, banana_desucker],
+         items: [banana_tidy, banana_sanitation_deleaf, banana_desucker]}
+  blade_clean: {default: true}
+  min_functional_leaves: {default: 9, min: 4, max: 15}     # at flowering (assumption pending NRCB / NHB)
+  expected_n: {default: 1, min: 0, max: 6}                 # tidy cuts
+  marks_n: {default: 4, min: 0, max: 20}                   # deleaf / bunch / sucker MARKs
+  per_item_s: {default: 20.0, min: 5.0, max: 60.0}
+  per_mark_s: {default: 3.0, min: 1.0, max: 20.0}
+  tool_change_s: {default: 9.0, min: 0.0, max: 30.0}
+  blade_clean_s: {default: 5.0, min: 0.0, max: 30.0}
+preconditions: [ready_common, tool_in_rack, dwell_slope, no_wet_foliage]
+steps:
+  - "Tool change to PRUNER, blade clean"
+  - "banana_tidy: cut a dead blade that dangles into the band, at the band (tidy-up only)"
+  - "banana_sanitation_deleaf (MARK): leaf ids with % Sigatoka area, petiole cut by a human"
+  - "banana_desucker (MARK only): count peepers and sword suckers, propose the follower (keep 1-2)"
+interlocks: [blade_interlock, work_field_person, no_green_leaf_cuts, debris_zone_clear]
+outputs: [tree_record_prune, marks]
+kpis: [O-14, O-23]
+retry: {no_cut_after_close_s: 1, realign: 1}
+gates:
+  - {kind: dwell, ext_m: 0.0, dwell_s: $per_item_s}
+  - {kind: dwell, ext_m: 0.0, dwell_s: 60.0}
+estimate:
+  fixed_s: "tool_change_s + blade_clean_s + marks_n * per_mark_s"
+  per_item_s: $per_item_s
+  items: $expected_n
+console: {tile: "PRUNE", icon: prune, hi: "छँटाई केला", en: "Prune banana", order: 11, group: tree_card, show: [jobs],
+          advanced: [min_functional_leaves]}

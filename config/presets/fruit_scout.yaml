@@ -1,0 +1,42 @@
+# FRUIT SCOUT: count, maturity, size, harvest window (MISSION-PRESETS 4).
+schema: nandi.preset/1
+id: fruit_scout
+mode: fruit_scout
+version: 1
+kind: camera
+title: "FRUIT SCOUT"
+season: fruit_scout
+crops: [mango, guava, papaya, banana]
+targets: [tree_ids, block_id]
+crown: optional                   # one_lap needs the crown gate green; reuse_tree360 / scan_bursts need nothing
+weather: non_contact
+slope_limit_deg: 3.0
+params:
+  source: {default: reuse_tree360, enum: [reuse_tree360, one_lap, scan_bursts]}
+  max_frame_age_h: {default: 24.0, min: 1.0, max: 72.0}    # frames <= 24 h old (assumption)
+  dedupe_radius_m: {default: 0.04, min: 0.01, max: 0.10}
+  min_light_lux: {default: 2000, min: 200, max: 20000}
+preconditions: [ready_common, frames_fresh_or_crown_gate, light]
+steps:
+  - "Gather frames"
+  - "Detect fruit and bags; lift into the tree frame"
+  - "Track across views, count once"
+  - "Stage per crop (mango: shoulders + stem end + days since fruit set, never skin colour)"
+  - "Size (low band from depth)"
+  - "Reachable (in band) vs MARK"
+  - "Harvest window per tree and block"
+interlocks: [common, camera_only]
+outputs: [tree_record_fruit, block_yield_estimate, harvest_window_flag, marks]
+kpis: [O-09, O-15]
+retry: {occlusion: estimate}
+gates:
+  - {kind: dwell, ext_m: 0.0, dwell_s: 10.0}
+estimate:
+  per_tree_s:
+    by: source
+    values: {reuse_tree360: 10.0, scan_bursts: 10.0, one_lap: 160.0}
+  disk_mb_per_tree:
+    by: source
+    values: {reuse_tree360: 0.1, scan_bursts: 0.1, one_lap: 26.0}
+console: {tile: "SCOUT", icon: fruit, hi: "फल गिनती", en: "Fruit scout", order: 5, group: tree_card, show: [source],
+          advanced: [max_frame_age_h, dedupe_radius_m]}

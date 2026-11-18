@@ -1,0 +1,38 @@
+# Atharv Nandi simulator site. FICTITIOUS origin: a point in the open Atlantic Ocean, chosen so it can
+# never be mistaken for a real farm. No real farm coordinates belong in this file.
+# The sim world frame is the local ENU frame of this origin: x = East, y = North, z = Up (metres).
+name: nandi-sim-site
+origin:
+  lat: 12.5      # degrees, WGS84 (fictitious)
+  lon: -30.0     # degrees, WGS84 (fictitious)
+  alt: 0.0       # metres above the ellipsoid (fictitious)
+
+# Where a mission returns to (local metres) and faces on arrival (rad, 0 = East).
+home:
+  x: 0.0
+  y: 0.0
+  yaw: 0.0
+
+# Basket capacity: full at the stricter of the two limits (crops are 0.15 kg in the sim).
+basket:
+  max_crops: 6
+  max_kg: 6.5    # load_model software limit min(10 kg walking, 10.8 L x 0.6 kg/L = 6.5 kg by volume); max_crops binds first
+
+# Energy model. Every value is ASSUMED for the simulator, not measured on hardware.
+energy:
+  capacity_wh: 500.0     # ASSUMED 500 Wh pack (energy_model.ASSUMED_CAPACITY_WH; MJCF battery geom 3.2 kg)
+  eta: 0.6               # ASSUMED drive efficiency
+  p_idle_w: 15.0         # ASSUMED baseline draw
+  walk_power_w: 220.0    # DERIVED from MEASURED walk mech power, see energy_model.ASSUMED_WALK_POWER_W (was 60)
+  pick_energy_wh: 0.25   # ASSUMED, route estimates only
+  walk_speed_mps: 0.12   # ASSUMED incl. turns (MEASURED straight 0.22-0.27 m/s at vx 1), route estimates only
+  low_soc: 0.25          # below this a running mission returns home
+  reserve: 0.20          # acceptance needs route estimate + this reserve
+
+# Used only when config/safety.yaml (owned by the safety package) has no geofence:
+# a rectangle in local metres around the sim field.
+fallback_geofence:
+  x_min: -2.0
+  x_max: 8.0
+  y_min: -3.0
+  y_max: 3.0

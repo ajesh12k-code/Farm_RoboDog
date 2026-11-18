@@ -1,0 +1,24 @@
+# Atharv Nandi tree generator parameters: papaya (Red Lady class). WP23, ORCHARD-MVP-SPEC 3.3.
+# H 1.6-2.6 m, trunk r 0.06-0.08, crown of 14 petioles and discs, trunk-hugging fruit column, lowest 1-3 ripe,
+# masses 1.0-1.8 kg (assumption), no leaves in the pick band. Schema nandi.tree_species/1.
+schema: nandi.tree_species/1
+species: papaya
+archetype: papaya
+label: "Papaya (Red Lady class)"
+height_m: [1.6, 2.6]
+trunk_r_m: [0.06, 0.08]
+crown_drop_m: 0.30          # trunk top = H - 0.30; petioles start there (WP0c candidates)
+petioles: {n: 14, len_m: [0.45, 0.65], disc_m: [0.22, 0.28]}
+foliage: {rgba: [0.35, 0.60, 0.22, 1.0]}
+fruit:
+  column_z_m: [0.6, 1.6]     # trunk-hugging column below the crown
+  n: [8, 11]
+  length_m: [0.20, 0.24]
+  shape: [0.31, 0.31, 0.50]   # width 2 x 0.31 x 0.20-0.24 = 124-149 mm: inside the 0.16 m T4 jaw and WP0c neighbour_r 0.075
+  mass_kg: [1.0, 1.8]
+  ripe_lowest: [1, 3]        # lowest 1-3 ripe (colour break)
+  demo_ripe_in_band: 2
+  pedicel_m: [0.015, 0.025]
+leaves: null                 # LEAF SCAN n/a: crown-only
+decals: {n: 2, r_m: [0.025, 0.035]}
+leaf_decals: null

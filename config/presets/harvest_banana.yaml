@@ -1,0 +1,38 @@
+# HARVEST banana = MARK only (MISSION-PRESETS 5, OQ-03): bunch MARK (ribbon colour -> shooting date -> harvest date),
+# tool_hint human_cut; no "hold position" assist; Nandi keeps >= 3 m from a MARKed bunch while a human cut is flagged.
+schema: nandi.preset/1
+id: harvest_banana
+mode: harvest_tree
+version: 1
+kind: survey
+title: "HARVEST banana (bunch MARK only)"
+season: harvest_banana
+crops: [banana]
+targets: [tree_ids, row_ids]
+crown: none
+weather: non_contact
+slope_limit_deg: 5.0
+method: mark
+params:
+  method: {default: mark, enum: [mark]}
+  exclusion_m: {default: 3.0, min: 3.0, max: 10.0}
+  per_tree_s: {default: 20.0, min: 5.0, max: 60.0}         # assumption
+  min_light_lux: {default: 2000, min: 200, max: 20000}
+preconditions: [ready_common, slope_walk, light]
+steps:
+  - "Stop abeam the bunch; ring + crown-stowed frames"
+  - "Bunch MARK: ribbon colour -> shooting date -> harvest date; height; hands-count lead; tool_hint human_cut"
+  - "Leave and keep >= 3 m from the bunch while a human cut is flagged in progress"
+interlocks: [common, bunch_exclusion_3m]
+outputs: [marks, tree_record_fruit]
+kpis: [O-15]
+retry: {per_target: 0}
+gates:
+  - {kind: walk, ext_m: 0.0, v_mps: 0.18}
+  - {kind: dwell, ext_m: 0.0, dwell_s: $per_tree_s}
+estimate:
+  per_tree_s: $per_tree_s
+  walk_m: route_m
+  v_mps: 0.18
+console: {tile: "MARK", icon: mark, hi: "गुच्छा निशान", en: "Mark banana bunch", order: 9, group: tree_card,
+          show: [], advanced: [exclusion_m]}

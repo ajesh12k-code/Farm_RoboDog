@@ -1,0 +1,19 @@
+# One TREE 360 capture station (WORKFLOWS-SPEC A.2 example; MISSION-PRESETS 2; WP34 template).
+schema: nandi.workflow/1
+id: capture_station
+version: 1
+kind: subtree
+primitives_api: 1
+labels: {en: capture station, hi: फ़ोटो स्टेशन}
+params:
+  r: {default: 1.5, min: 1.2, max: 3.0, unit: m}
+  dtheta: {default: 0.785, min: 0.2, max: 1.6, unit: rad}
+  v_max: {default: 0.15, min: 0.05, max: 0.15, unit: m/s}
+  settle_s: {default: 1.0, min: 0.0, max: 5.0, unit: s}
+root:
+  sequence:
+  - action: {do: orbit_arc, args: {r: $r, dtheta: $dtheta, v_max: $v_max}, timeout_s: 60,
+             labels: {en: orbit, hi: परिक्रमा}}
+  - action: {do: settle, args: {s: $settle_s}, timeout_s: 5, labels: {en: settle, hi: स्थिर}}
+  - action: {do: capture, args: {cams: [ring, crown]}, timeout_s: 20, labels: {en: capture, hi: फ़ोटो}}
+  - action: {do: coverage_update, labels: {en: coverage, hi: कवरेज}}
