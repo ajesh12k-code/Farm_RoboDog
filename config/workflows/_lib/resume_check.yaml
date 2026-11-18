@@ -1,0 +1,17 @@
+# Resume check run before a paused workflow re-enters its tree (WORKFLOWS-SPEC A.4; WP34).
+# Step 1 (id@version#sha8 equals the INDEX entry, else workflow_changed) is in engine.Engine.from_checkpoint;
+# the pre-motion warning and the long-pause operator ack are L1 (WP38). Step 6 (re-plan the remaining targets)
+# is every foreach's replan on resume; step 7 is each action's resumable policy.
+schema: nandi.workflow/1
+id: resume_check
+version: 1
+kind: subtree
+primitives_api: 1
+labels: {en: resume check, hi: फिर शुरू जाँच}
+root:
+  sequence:
+  - check: {cond: ready_common, else: fail, reason: ready_check, labels: {en: ready check, hi: तैयारी जाँच}}
+  - action: {do: return_to_checkpoint, args: {v_max: 0.18}, timeout_s: 1800,
+             labels: {en: return to checkpoint, hi: चेकपॉइंट पर वापस}}
+  # the pose settles over a sensor cycle or two after arrival: wait (bounded) instead of a one-tick check
+  - wait_for: {cond: drift_ok, timeout_s: 2, on_timeout: fail, reason: drift_gate, labels: {en: drift gate, hi: स्थिति जाँच}}

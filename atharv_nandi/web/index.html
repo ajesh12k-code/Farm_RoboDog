@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Atharv Nandi Console</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+  <!-- Three.js r160 is vendored under atharv_nandi/web/vendor/three (see atharv_nandi/web/vendor/SHA256SUMS): no CDN, works offline. -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/vendor/three/build/three.module.js",
+        "three/addons/": "/vendor/three/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body data-tab="map">
+  <div id="view"></div>
+
+  <header id="topbar">
+    <span class="brand">अथर्व नंदी <small data-i18n="console">कंसोल</small></span>
+    <span id="auth-badge" class="badge">-</span>
+    <div id="chips" class="chips" aria-label="Status"></div>
+    <button id="btn-lang" class="mini" title="हिन्दी / English">EN</button>
+  </header>
+
+  <div id="banner" class="banner" hidden data-i18n="disconnected">सिम से कनेक्शन टूटा - दोबारा जोड़ रहे हैं...</div>
+  <div id="fallen" class="banner danger" hidden data-i18n="fallen">रोबोट गिर गया है - वापसी मेनू देखें</div>
+  <div id="safety-banner" class="banner estop" hidden role="alert">
+    <strong data-i18n="estop_latched">आपात रोक लगी है</strong>
+    <span id="safety-reason"></span>
+    <span id="safety-stop" class="small"></span>
+  </div>
+
+  <nav id="tabs" aria-label="Views">
+    <button data-tab="map" class="on" data-i18n="view_map">नक्शा</button>
+    <button data-tab="tree" data-i18n="view_tree">पेड़</button>
+    <button data-tab="queue" data-i18n="view_queue">कतार</button>
+    <button data-tab="recovery" data-i18n="view_recovery">वापसी</button>
+    <button data-tab="jobs" data-i18n="view_jobs">काम</button>
+    <button data-tab="drive" data-i18n="view_drive">चलाएँ</button>
+    <button data-tab="3d" data-i18n="view_3d">3D</button>
+  </nav>
+
+  <main id="sheet">
+    <div id="presetbar" class="presetbar" aria-label="Presets"></div>
+
+    <!-- Orchard map: trees with physical tags, rows / blocks lasso, robot, geofence, orbit annuli, laterals -->
+    <section data-view="map" class="view">
+      <div class="map-wrap"><canvas id="map" width="400" height="400"></canvas></div>
+      <div class="row wrap">
+        <button id="btn-lasso" class="mini2" data-i18n="lasso">घेरें</button>
+        <button id="btn-clear-sel" class="mini2" data-i18n="clear">साफ़ करें</button>
+        <span id="sel-summary" class="muted small"></span>
+      </div>
+      <div id="row-chips" class="chips wrap"></div>
+      <p id="map-note" class="muted small"></p>
+    </section>
+
+    <!-- Tree card: last record, filtered keyframe strip, preset buttons -->
+    <section data-view="tree" class="view">
+      <div id="tree-card">
+        <h2 id="tc-title" data-i18n="select_tree">नक्शे पर पेड़ चुनें</h2>
+        <dl id="tc-facts" class="facts"></dl>
+        <div id="tc-buttons" class="tc-buttons">
+          <button data-tc="tree360" data-op="1" class="accent" data-i18n="btn_360">360</button>
+          <button data-tc="leaf_scan" data-op="1" data-i18n="btn_leaf">पत्ती</button>
+          <button data-tc="trunk_scan" data-op="1" data-i18n="btn_trunk">तना</button>
+          <button data-tc="fruit_scout" data-op="1" data-i18n="btn_scout">फल गिनती</button>
+          <button data-tc="harvest" data-op="1" data-i18n="btn_harvest">तुड़ाई</button>
+          <button data-tc="prune" data-op="1" data-i18n="btn_prune">छँटाई</button>
+          <button data-tc="mark" data-op="1" data-i18n="btn_mark">निशान</button>
+        </div>
+        <p id="tc-reason" class="muted small"></p>
+        <h3 data-i18n="strips">फ़िल्टर की हुई पट्टियाँ</h3>
+        <div id="tc-strips" class="strips"></div>
+        <h3 data-i18n="last_visit">पिछली जाँच</h3>
+        <div id="tc-record" class="record muted small" data-i18n="no_record">अभी कोई रिकॉर्ड नहीं</div>
+      </div>
+    </section>
+
+    <!-- Queue: running item, progress chips, live band strips, crown gauge, queue with ETA / SoC / disk -->
+    <section data-view="queue" class="view">
+      <div id="active-card" class="card"></div>
+      <div class="row">
+        <button id="btn-pause" data-op="1" data-i18n="pause">रोकें</button>
+        <button id="btn-resume" data-op="1" data-i18n="resume">फिर चलाएँ</button>
+        <button id="btn-abort" data-op="1" class="warn" data-i18n="abort">रद्द करें</button>
+      </div>
+      <div id="progress-chips" class="chips wrap"></div>
+      <h3 data-i18n="bands">पट्टियाँ</h3>
+      <div id="band-strips" class="bands"></div>
+      <h3 data-i18n="crown">मुकुट मस्तूल</h3>
+      <div class="crown-row">
+        <div id="crown-gauge" class="gauge" aria-label="Crown gauge"><span id="crown-fill"></span><i style="bottom:37.5%"></i><i style="bottom:100%"></i></div>
+        <dl id="crown-facts" class="facts"></dl>
+      </div>
+      <div class="row">
+        <button data-crown="stow" data-op="1" data-i18n="stow">नीचे करें</button>
+        <button data-crown="mid" data-op="1" data-i18n="mid">बीच</button>
+        <button data-crown="high" data-op="1" data-i18n="high">ऊपर</button>
+      </div>
+      <h3 data-i18n="view_queue">कतार</h3>
+      <ol id="queue-list" class="queue"></ol>
+      <h3 data-i18n="history">पिछले काम</h3>
+      <ol id="history-list" class="queue muted"></ol>
+    </section>
+
+    <!-- Recovery menu (WP28): SAFE PARK, RETURN HOME, abort, e-stop operator confirm, link prompt, Fallen checklist -->
+    <section data-view="recovery" class="view">
+      <dl id="rec-facts" class="facts"></dl>
+      <p id="rec-prompt" class="prompt" hidden></p>
+      <div class="grid2">
+        <button data-rec="run_safe_park" data-op="1" class="accent" data-i18n="safe_park">सुरक्षित रुको</button>
+        <button data-rec="run_return_home" data-op="1" class="accent" data-i18n="return_home">घर लौटो</button>
+        <button data-rec="ack_resume" data-op="1" data-i18n="link_resume">फिर चलाएँ</button>
+        <button data-rec="ack_halt" data-op="1" class="warn" data-i18n="link_halt">रुके रहो</button>
+        <button data-rec="confirm_operator" data-op="1" data-i18n="confirm_operator">ऑपरेटर पुष्टि (आपात रोक)</button>
+        <button data-rec="abort" data-op="1" class="warn" data-i18n="abort_recovery">वापसी रद्द</button>
+      </div>
+      <p class="muted small" data-i18n="local_confirm_note">स्थानीय पुष्टि केवल हैंडहेल्ड से (कंसोल से नहीं)</p>
+      <h3 data-i18n="fallen_checklist">गिरने के बाद जाँच सूची</h3>
+      <div id="fallen-checks" class="grid2"></div>
+      <div class="row"><button id="btn-drop-local" data-op="1" class="mini2" data-i18n="drop_local">सिम: लिंक 6 s काटें</button></div>
+    </section>
+
+    <!-- Jobs: Hindi-first job sheet per row (download), MARK list -->
+    <section data-view="jobs" class="view">
+      <div class="row wrap"><select id="job-row" aria-label="Row"></select>
+        <button id="btn-job-hi" class="accent" data-op="1" data-i18n="download_hi">सूची डाउनलोड (हिन्दी)</button>
+        <button id="btn-job-en" data-op="1" data-i18n="download_en">डाउनलोड (English)</button></div>
+      <div id="job-preview" class="jobs"></div>
+      <h3 data-i18n="marks">निशान</h3>
+      <ol id="mark-list" class="queue small"></ol>
+    </section>
+
+    <!-- Drive: the pilot console (HUD, mission, camera, D-pad, gait and arm) -->
+    <section data-view="drive" class="view">
+      <section id="hud">
+        <div id="health" class="health" aria-label="Node health"></div>
+        <dl class="facts">
+          <dt data-i18n="crops">फसल</dt><dd id="hud-crops">-</dd>
+          <dt data-i18n="falls">गिरना</dt><dd id="hud-falls">-</dd>
+          <dt data-i18n="time">समय</dt><dd id="hud-time">-</dd>
+          <dt data-i18n="gait">चाल</dt><dd id="hud-mode">-</dd>
+          <dt data-i18n="arm">भुजा</dt><dd id="hud-arm">-</dd>
+          <dt data-i18n="pos">स्थिति</dt><dd id="hud-pos">-</dd>
+          <dt data-i18n="tilt">झुकाव</dt><dd id="hud-tilt">-</dd>
+          <dt data-i18n="link">लिंक</dt><dd id="hud-link">-</dd>
+          <dt data-i18n="battery">बैटरी</dt>
+          <dd><span class="bar"><span id="battery-bar"></span></span> <span id="battery-text">n/a</span></dd>
+        </dl>
+        <p id="hud-harvest" class="muted"></p>
+      </section>
+      <section id="drive">
+        <div class="dpad">
+          <button data-drive="0,0,1" data-op="1" title="Turn left (Q)">&#x21B6;</button>
+          <button data-drive="1,0,0" data-op="1" title="Forward (W)">&#x25B2;</button>
+          <button data-drive="0,0,-1" data-op="1" title="Turn right (E)">&#x21B7;</button>
+          <button data-drive="0,1,0" data-op="1" title="Strafe left (A)">&#x25C0;</button>
+          <button data-action="stop" data-op="1" class="stop" title="Stop gait (X)">&#x25A0;</button>
+          <button data-drive="0,-1,0" data-op="1" title="Strafe right (D)">&#x25B6;</button>
+          <span></span>
+          <button data-drive="-1,0,0" data-op="1" title="Backward (S)">&#x25BC;</button>
+          <span></span>
+        </div>
+        <p class="muted small" data-i18n="hold_hint">चलने के लिए दबाए रखें, एक कदम के लिए टैप करें</p>
+      </section>
+      <section id="ops">
+        <h3 data-i18n="mission">मिशन</h3>
+        <div class="row">
+          <button id="btn-mission-start" class="accent" data-op="1" data-i18n="start_zone_a">ज़ोन A शुरू करें</button>
+          <button id="btn-mission-abort" class="warn" data-op="1" data-i18n="abort">रद्द करें</button>
+        </div>
+        <dl class="facts">
+          <dt data-i18n="state">अवस्था</dt><dd id="mission-state">n/a</dd>
+          <dt data-i18n="progress">प्रगति</dt>
+          <dd><span class="bar"><span id="mission-bar"></span></span> <span id="mission-progress">n/a</span></dd>
+          <dt data-i18n="picked">तोड़ी गई</dt><dd id="mission-picked">n/a</dd>
+          <dt data-i18n="basket">टोकरी</dt><dd id="mission-basket">n/a</dd>
+          <dt data-i18n="detections">पहचान</dt><dd id="det-count">n/a</dd>
+          <dt data-i18n="run">रन</dt><dd id="run-id">n/a</dd>
+        </dl>
+        <div id="kpis" class="kpis"></div>
+        <h3 data-i18n="camera">कैमरा</h3>
+        <div class="camera"><img id="cam-img" alt="" hidden><span id="cam-na" class="muted">n/a</span></div>
+      </section>
+      <section id="side">
+        <div class="actions">
+          <button data-action="auto_harvest" data-op="1" class="accent" title="H" data-i18n="harvest">कटाई</button>
+          <button data-action="toggle_mode" data-op="1" title="G" data-i18n="switch_gait">चाल बदलें</button>
+          <button data-action="release_arm" data-op="1" title="Esc" data-i18n="release_arm">भुजा छोड़ें</button>
+          <button data-action="reset_world" data-op="1" class="warn" title="R" data-i18n="reset">रीसेट</button>
+          <button id="btn-envelope" data-op="1" title="V" data-i18n="envelope">पहुँच क्षेत्र</button>
+          <button id="btn-follow" class="on" title="F" data-i18n="follow">पीछा करें</button>
+        </div>
+        <h3 data-i18n="gait">चाल</h3>
+        <div id="gait-sliders" class="sliders"></div>
+        <h3><span data-i18n="arm">भुजा</span> <span class="muted small" data-i18n="arm_hint">(स्लाइडर हिलाने से मैनुअल नियंत्रण)</span></h3>
+        <div id="arm-sliders" class="sliders"></div>
+        <p class="muted small keys" data-i18n="keys_help"></p>
+      </section>
+      <p id="i18n-note" class="muted small"></p>
+    </section>
+  </main>
+
+  <!-- E-STOP: outside every view, always visible, >= 64 px on phones (OS 5.5); a separate channel, never queued -->
+  <div id="estop-box">
+    <button id="btn-estop" class="estop" title="Emergency stop (Space)" aria-label="Emergency stop / आपात रोक">
+      <span data-i18n="estop">आपात रोक</span><small>STOP</small>
+    </button>
+    <button id="btn-estop-reset" class="mini-reset" data-op="1" data-i18n="estop_reset">आपात रोक हटाएँ</button>
+  </div>
+
+  <dialog id="auth-dialog">
+    <form method="dialog" id="auth-form">
+      <h2 data-i18n="auth_title">कंसोल टोकन</h2>
+      <p class="small" id="auth-msg" data-i18n="auth_prompt">इस कंसोल के लिए ऑपरेटर या दर्शक टोकन चाहिए।</p>
+      <input id="auth-token" type="password" autocomplete="current-password" required>
+      <div class="row"><button type="submit" class="accent" data-i18n="sign_in">साइन इन</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="assist-dialog">
+    <h2 data-i18n="assist_title">सहायता चाहिए</h2>
+    <p id="assist-text" class="small"></p>
+    <div class="row">
+      <button data-assist="take_over" data-op="1" class="accent" data-i18n="take_over">नियंत्रण लें</button>
+      <button data-assist="skip" data-op="1" data-i18n="skip">छोड़ें</button>
+      <button data-assist="halt" data-op="1" class="warn" data-i18n="halt">रोकें</button>
+    </div>
+  </dialog>
+
+  <dialog id="mark-dialog">
+    <form method="dialog" id="mark-form">
+      <h2 data-i18n="mark_title">निशान लगाएँ</h2>
+      <label><span data-i18n="mark_kind">काम</span> <select id="mark-kind"></select></label>
+      <label><span data-i18n="clock">घड़ी</span> <select id="mark-clock"></select></label>
+      <label><span data-i18n="h_class">ऊँचाई</span> <select id="mark-h"></select></label>
+      <div class="row">
+        <button type="submit" value="save" class="accent" data-i18n="save">सहेजें</button>
+        <button type="submit" value="cancel" data-i18n="cancel">रद्द</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toasts"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

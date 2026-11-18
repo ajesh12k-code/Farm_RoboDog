@@ -5,13 +5,13 @@ import mujoco
 import numpy as np
 import pytest
 
-from controllers import rl_balance_policy
-from controllers.farm_scene import crop_qpos_slice, load_farm_model
-from controllers.locomotion_logic import (
+from atharv_nandi.core import rl_balance_policy
+from atharv_nandi.core.farm_scene import crop_qpos_slice, load_farm_model
+from atharv_nandi.core.locomotion_logic import (
     MSG_MODE_RL, MSG_MODE_TRIPOD, MSG_NO_POLICY, GaitParams, HoldDeadman, LocomotionModeSelector,
     locomotion_status_json, parse_cmd_vel, quat_to_roll_pitch, quat_to_yaw,
 )
-from controllers.tripod_gait import TripodGaitGenerator
+from atharv_nandi.core.tripod_gait import TripodGaitGenerator
 
 
 def quat_axis_angle(axis, angle):
@@ -155,7 +155,8 @@ def test_locomotion_status_json_contract():
     sel = LocomotionModeSelector(False)
     data = json.loads(locomotion_status_json(sel, GaitParams(), walking=True))
     assert data == {"mode": "tripod", "policy_loaded": False, "policy_path": None,
-                    "gait_params": [1.0, 1.0, 1.8, 1.0], "walking": True}
+                    "gait_params": [1.0, 1.0, 1.8, 1.0], "walking": True, "stop_seq": 0}
+    assert json.loads(locomotion_status_json(sel, GaitParams(), False, stop_seq=3))["stop_seq"] == 3
 
 
 # --- RL controller (no SB3 needed) --------------------------------------------------------
@@ -188,3 +189,57 @@ def test_rl_obs_uses_farm_model_and_robot_prefix_only():
     for arr in (curr2, prev2):
         arr[crop_qpos_slice(1)][0:3] += 0.3
     assert np.allclose(rl.build_obs(prev2, curr2), obs)
+
+
+# --- safety gate -----------------------------------------------------------------------------
+from atharv_nandi.core.locomotion_logic import LocomotionSafetyGate  # noqa: E402
+from atharv_nandi.core.safety_logic import SpeedCap  # noqa: E402
+
+
+def test_safety_gate_refuses_cmd_while_estopped_but_passes_zero():
+    gate = LocomotionSafetyGate(SpeedCap(1.0, 1.0), 0.5)
+    assert gate.filter_cmd(parse_cmd_vel(0.5, 0, 1, 0)) is not None
+    assert gate.set_estop(True, "operator") is True
+    assert gate.set_estop(True, "operator") is False
+    assert gate.filter_cmd(parse_cmd_vel(0.5, 0, 1, 0)) is None
+    assert gate.filter_cmd(parse_cmd_vel(0, 0, 0, 0)) is not None
+    assert gate.refused == 1
+    gate.set_estop(False)
+    assert gate.filter_cmd(parse_cmd_vel(0.5, 0, 1, 0)).vx == 0.5
+
+
+def test_safety_gate_caps_cmd_and_speed_scale():
+    gate = LocomotionSafetyGate(SpeedCap(max_speed_scale=1.0, max_cmd=0.6), 0.5)
+    cmd = gate.filter_cmd(parse_cmd_vel(1.0, 1.0, 1.0, -1.0))
+    assert math.hypot(cmd.vx, cmd.vy) == pytest.approx(0.6) and cmd.yaw == pytest.approx(-0.6) and cmd.hold
+    p = gate.clamp_params(GaitParams.from_sequence([1.5, 1.0, 1.8, 1.0]))
+    assert p.speed_scale == 1.0 and p.freq_hz == 1.8
+    assert gate.clamp_params(GaitParams.from_sequence([0.4])).speed_scale == 0.4
+
+
+def test_safety_gate_enforces_a_cap_below_the_gait_minimum():
+    gate = LocomotionSafetyGate(SpeedCap(max_speed_scale=0.1, max_cmd=1.0), 0.5)
+    p = gate.clamp_params(GaitParams.from_sequence([1.0]))
+    assert p.speed_scale == pytest.approx(0.2)                # the gait's own floor
+    cmd = gate.filter_cmd(parse_cmd_vel(1.0, 0.0, 1.0, 0.4))
+    # strides = speed_scale x cmd: 0.2 x 0.5 == the configured 0.1
+    assert p.speed_scale * cmd.vx == pytest.approx(0.1) and cmd.yaw == pytest.approx(0.2)
+    assert LocomotionSafetyGate(SpeedCap(1.0, 1.0), 0.5).cmd_scale == 1.0
+
+
+def test_safety_gate_holds_on_stale_qpos():
+    gate = LocomotionSafetyGate(SpeedCap(), 0.5)
+    assert not gate.hold_position(0.0)       # never seen: startup is not a hold
+    gate.qpos_seen(1.0)
+    assert not gate.hold_position(1.4)
+    assert gate.hold_position(1.6)
+    gate.qpos_seen(1.7)
+    assert not gate.hold_position(1.75)
+    assert gate.status(1.75)["holding_stale_qpos"] is False
+
+
+def test_locomotion_status_includes_safety_when_given():
+    sel = LocomotionModeSelector(False)
+    d = json.loads(locomotion_status_json(sel, GaitParams(), False, {"estopped": True}))
+    assert d["safety"] == {"estopped": True}
+    assert "safety" not in json.loads(locomotion_status_json(sel, GaitParams(), False))

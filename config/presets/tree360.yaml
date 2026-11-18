@@ -1,0 +1,69 @@
+# TREE 360 VIDEO: orbit, pest review, feeds Deep Scan (MISSION-PRESETS 2; example file MP 0.8).
+schema: nandi.preset/1
+id: tree360
+mode: tree360
+version: 2
+kind: camera
+title: "TREE 360 VIDEO"
+season: tree360
+crops: [mango, guava, papaya, banana]
+targets: [tree_ids, block_sample]
+crown: required
+weather: non_contact
+slope_limit_deg: 3.0        # dwell <= 3 deg cross (MP 2 preconditions)
+params:
+  arc_mode: {default: auto, enum: [auto, full, two_sided]}
+  standoff_m: {default: 0.9, min: 0.9, max: 1.5}      # lens to canopy surface
+  r1_m: {default: "clamp(canopy_r+standoff_m,1.2,3.0)", min: 1.2, max: 3.0}
+  r2_m: {default: "clamp(r1+0.8,1.2,3.0)", min: 1.2, max: 3.0}
+  r2_enabled: {default: false}
+  stations: {default: 8, min: 4, max: 16}
+  bands: {default: [low, mid, high], items: [low, mid, high]}
+  mid_ext_m: {default: 0.6, min: 0.0, max: 1.6}       # lens 1.70 m
+  high_ext_m: {default: 1.6, min: 0.0, max: 1.6}      # lens 2.70 m
+  gimbal_tilt_deg: {default: {mid: -10, high: -20}}
+  crown_walk: {default: snake, enum: [snake, snake_mid, stop_and_go]}   # snake: arcs alternate mid / high (OS 1.2); snake_mid: arcs at mid; stop_and_go: arcs stowed (OS 2.3 rule 7)
+  settle_s: {default: 1.0, min: 0.5, max: 3.0}
+  capture_s: {default: 0.5, min: 0.2, max: 2.0}
+  v_mps: {default: 0.15, min: 0.05, max: 0.15}
+  min_light_lux: {default: 2000, min: 200, max: 20000}
+preconditions: [ready_common, annulus_clear_or_two_sided, slope_crown_walk, crown_gate, canopy_r_known, light, alley_clearance,
+                dwell_slope]
+steps:
+  - "Go to the entry station at r1, tangent heading (CCW, tree on the left)"
+  - "Settle 1 s; open chunks; raise to mid (3 s)"
+  - "Each station: gimbal to the trunk bearing + band tilt; capture low + mid; crown snakes mid <-> high (5 s); settle; capture"
+  - "Next arc under closed loop (orbit.py, low-plane trunk fit, tolerance 0.10 m); stop-and-go: crown to 0 for the arc"
+  - "Full: stop at 360 deg + overlap. Two-sided: stop 0.3 m before a neighbour canopy, record gap_deg, repeat from the other alley"
+  - "Optional r2 lap in the opposite direction (right ring camera)"
+  - "Stow (3 s); close chunks; manifest; coverage; strips; MP4 per band after the run"
+  - "TreeRecord + deep_scan_request"
+interlocks: [common, person_pause, crown_scaled_fields, crown_auto_retract, arm_park]
+outputs: [tree_record, keyframes, strips, manifest, deepscan_request]
+kpis: [O-01, O-02, O-03, O-05, O-06, O-21, O-22]
+retry: {radius_reentry: 2, then: mark_gap}
+gates:
+  - {kind: raise, ext_m: 0.0, to_m: $mid_ext_m, slope_deg: 2.0}
+  - {kind: raise, ext_m: $mid_ext_m, to_m: $high_ext_m, slope_deg: 2.0}
+  - {kind: walk, ext_m: $high_ext_m, v_mps: $v_mps, slope_deg: 2.0, when: {crown_walk: snake}}  # snake: half the arcs at high
+  - {kind: walk, ext_m: $mid_ext_m, v_mps: $v_mps, slope_deg: 2.0, when: {crown_walk: snake_mid}}  # arcs at mid, high only standing
+  - {kind: walk, ext_m: 0.0, v_mps: $v_mps, when: {crown_walk: stop_and_go}}                    # stop-and-go: arcs stowed
+  - {kind: dwell, ext_m: $high_ext_m, dwell_s: 60.0}                    # station dwell (long dwell rule)
+estimate:
+  per_tree_s:
+    by: crown_walk
+    values:
+      snake: "stations * (2 * pi * r1_m / stations / v_mps + 2 * settle_s + 2 * capture_s + (high_ext_m - mid_ext_m) / 0.2) + 2 * mid_ext_m / 0.2"
+      snake_mid: "stations * (2 * pi * r1_m / stations / v_mps + 2 * settle_s + 2 * capture_s + 2 * (high_ext_m - mid_ext_m) / 0.2) + 2 * mid_ext_m / 0.2"
+      stop_and_go: "stations * (2 * pi * r1_m / stations / v_mps + 2 * settle_s + 2 * capture_s + 2 * high_ext_m / 0.2)"
+  walk_m: "2 * pi * r1_m"
+  walk_s: 0                              # the orbit walk time is inside per_tree_s
+  crown_m:
+    by: crown_walk
+    values:
+      snake: "stations * (high_ext_m - mid_ext_m) + 2 * mid_ext_m"
+      snake_mid: "stations * 2 * (high_ext_m - mid_ext_m) + 2 * mid_ext_m"
+      stop_and_go: "stations * 2 * high_ext_m"
+  disk_mb_per_tree: 26.0                 # sim ~ 26 MB / tree (computed, MP 2)
+console: {tile: "TREE 360", icon: orbit, hi: "पेड़ 360", en: "Tree 360 video", order: 2, show: [arc_mode, stations],
+          advanced: [standoff_m, r1_m, r2_m, r2_enabled, bands, crown_walk, settle_s]}

@@ -1,0 +1,118 @@
+# Season and operating window, Uttar Pradesh (North India / Lucknow plain): ORCHARD-MVP-SPEC 4.5 (WP27).
+# Per preset season key and month: go | degraded | no_go with the reason. Read by sim/controllers/ready_check.py.
+# degraded = the tile warns and the start needs an operator confirm; no_go = the tile is disabled with the reason.
+# Every threshold and window here is an ASSUMPTION for the agronomist and the safety case (OS 4.5), not advice.
+# Month groups as in OS 4.5: jan_feb, mar_apr, may_jun, jul_sep (monsoon), oct_dec. A key may also give single
+# months (1..12) to refine a group; a single month wins over its group.
+schema: nandi.season/1
+region: UP
+classification: Public
+source: "ORCHARD-MVP-SPEC 4.5 table; MISSION-PRESETS 4, 5, 6 (calendar windows); ORCHARD-RESEARCH (hortportal, CISH, vikaspedia, NHB)"
+groups:
+  jan_feb: [1, 2]
+  mar_apr: [3, 4]
+  may_jun: [5, 6]
+  jul_sep: [7, 8, 9]
+  oct_dec: [10, 11, 12]
+keys:
+  scan:
+    jan_feb: {level: go, note: "mealybug trunk crawl"}
+    mar_apr: {level: go, note: "hopper, mildew on panicles"}
+    may_jun: {level: degraded, reason: heat, note: "heat > 40 C midday, dust storms"}
+    jul_sep: {level: degraded, reason: season, note: "monsoon: mud, wet foliage"}
+    oct_dec: {level: go}
+  trunk_scan:
+    jan_feb: {level: go, note: "mango mealybug crawling up the trunk (Dec-Jan), trunk-band state"}
+    mar_apr: {level: go}
+    may_jun: {level: degraded, reason: heat, note: "heat > 40 C midday, dust storms"}
+    jul_sep: {level: degraded, reason: season, note: "monsoon: mud, wet foliage"}
+    oct_dec: {level: go}
+  tree360:
+    jan_feb: {level: go}
+    mar_apr: {level: go, note: "gusts -> crown limit"}
+    may_jun: {level: degraded, reason: wind, note: "pre-monsoon gusts > 10 m/s"}
+    jul_sep: {level: degraded, reason: season, note: "monsoon: rain no-go, wet foliage"}
+    oct_dec: {level: go}
+  leaf_scan:
+    jan_feb: {level: go, note: "dawn mode for hoppers / mealybug"}
+    mar_apr: {level: go, note: "dawn mode"}
+    may_jun: {level: degraded, reason: heat, note: "heat"}
+    jul_sep: {level: degraded, reason: season, note: "monsoon: no-go in rain (weather check)"}
+    oct_dec: {level: go}
+  fruit_scout:            # not in the OS 4.5 table (ASSUMED): scouting is useful from fruit set to harvest
+    jan_feb: {level: go, note: "guava mrig bahar"}
+    mar_apr: {level: go, note: "mango fruit set"}
+    may_jun: {level: go, note: "mango harvest window"}
+    jul_sep: {level: degraded, reason: season, note: "monsoon: mud, wet foliage"}
+    oct_dec: {level: go, note: "guava mrig bahar"}
+  harvest_mango:
+    jan_feb: {level: no_go, reason: season, note: "no mango fruit"}
+    mar_apr: {level: no_go, reason: season, note: "fruit set, not mature"}
+    may_jun: {level: go, note: "Dashehari mid-June (2nd week June - 1st week July)"}
+    jul_sep: {level: degraded, reason: season, note: "Amrapali Jul-Aug; monsoon mud: degraded (OS 4.5)"}
+    9: {level: no_go, reason: season, note: "after the Amrapali window (Jul-Aug): no mango fruit"}
+    oct_dec: {level: no_go, reason: season, note: "no mango fruit"}
+  harvest_guava:
+    jan_feb: {level: go, note: "mrig bahar harvest Nov-Jan"}
+    mar_apr: {level: no_go, reason: season, note: "no guava crop"}
+    may_jun: {level: no_go, reason: season, note: "no guava crop"}
+    jul_sep: {level: degraded, reason: season, note: "ambe bahar Jul-Sep, fruit-fly risk"}
+    oct_dec: {level: go, note: "mrig bahar"}
+  harvest_papaya:         # not in the OS 4.5 table (ASSUMED): papaya fruits year round; OQ-01 A keeps it demo-only
+    jan_feb: {level: go}
+    mar_apr: {level: go}
+    may_jun: {level: degraded, reason: heat, note: "heat"}
+    jul_sep: {level: degraded, reason: season, note: "monsoon: collar rot risk, mud"}
+    oct_dec: {level: go}
+  harvest_banana:         # MARK only (bunch MARK, human cut); ASSUMED year round
+    jan_feb: {level: go}
+    mar_apr: {level: go}
+    may_jun: {level: go}
+    jul_sep: {level: degraded, reason: season, note: "monsoon: mud"}
+    oct_dec: {level: go}
+  prune_mango:            # MP 6: July-September post-harvest; out of window = warning + operator confirm
+    jan_feb: {level: degraded, reason: season, note: "out of the post-harvest window (Jul-Sep)"}
+    mar_apr: {level: degraded, reason: season, note: "out of window: flowering / fruit set"}
+    may_jun: {level: degraded, reason: season, note: "out of window: harvest"}
+    jul_sep: {level: go, note: "post-harvest; waterlogging degraded"}
+    oct_dec: {level: degraded, reason: season, note: "out of the post-harvest window (Jul-Sep)"}
+  prune_guava:            # MP 6: May and January-February
+    jan_feb: {level: go}
+    mar_apr: {level: degraded, reason: season, note: "out of window (May, Jan-Feb)"}
+    may_jun: {level: degraded, reason: season, note: "out of window (May, Jan-Feb)"}
+    5: {level: go}
+    jul_sep: {level: degraded, reason: season, note: "out of window (May, Jan-Feb)"}
+    oct_dec: {level: degraded, reason: season, note: "out of window (May, Jan-Feb)"}
+  prune_banana:           # banana_tidy + MARK sanitation / desucker; ASSUMED year round
+    jan_feb: {level: go}
+    mar_apr: {level: go}
+    may_jun: {level: go}
+    jul_sep: {level: go, note: "Sigatoka season: sanitation deleaf MARKs most useful"}
+    oct_dec: {level: go}
+  work:                   # tote / lead-to-marks / follow-me (ASSUMED)
+    jan_feb: {level: go}
+    mar_apr: {level: go}
+    may_jun: {level: degraded, reason: heat, note: "heat: worker at robot pace"}
+    jul_sep: {level: degraded, reason: season, note: "monsoon: mud"}
+    oct_dec: {level: go}
+  recovery:               # recovery, return home, safe park, e-stop recovery: never blocked by the season
+    jan_feb: {level: go}
+    mar_apr: {level: go}
+    may_jun: {level: go}
+    jul_sep: {level: go}
+    oct_dec: {level: go}
+  dock_unload:
+    jan_feb: {level: go}
+    mar_apr: {level: go}
+    may_jun: {level: go}
+    jul_sep: {level: go}
+    oct_dec: {level: go}
+# Field-level season profiles (config/fields/<world>.json "season"). demo_all_fruiting (ORCHARD-MVP-SPEC 1.1): all
+# four species fruit at once, which is not agronomically realistic; an entry with reason season (no_go or degraded) becomes go for the listed keys and
+# the result carries the label so the run card and the console banner say so. Weather and heat entries are kept.
+profiles:
+  up: {}
+  demo_all_fruiting:
+    label: "season: demo_all_fruiting (all four species fruit at once; not agronomically realistic)"
+    lift_season: [fruit_scout, harvest_mango, harvest_guava, harvest_papaya, harvest_banana, prune_mango,
+                        prune_guava, prune_banana]

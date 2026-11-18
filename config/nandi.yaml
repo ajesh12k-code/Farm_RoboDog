@@ -1,0 +1,76 @@
+# Atharv Nandi ROS 2 parameters (WPR; issue #103). Loaded by both launchers
+# (launch/nandi.launch.py and launch/launch_nandi.sh) as `--ros-args --params-file config/nandi.yaml`.
+#
+# Every parameter mirrors one NANDI_* environment variable (atharv_nandi/node_params.py):
+#   * a NANDI_* env var that is set wins (docker/run.sh passes them through);
+#   * else a non-empty value here is used;
+#   * else (empty string) the code default applies, exactly as with the env var unset.
+# Values are strings like the env vars; YAML ints / bools are accepted (true -> "1", false -> "0"), a flat list
+# becomes a comma list, and a mapping (or any list for wind / weather / gnss / link) is exported as JSON.
+# Secrets (NANDI_OPERATOR_TOKEN, NANDI_VIEWER_TOKEN, NANDI_MQTT_USERNAME, NANDI_MQTT_PASSWORD) are never
+# parameters: they stay env-only, with no default. So is NANDI_NOVNC_UP (the privacy lock-out decision
+# docker/start.sh exports).
+#
+# Shared by every node: the composed world must be the same in every process.
+/**:
+  ros__parameters:
+    world: ""               # NANDI_WORLD        legacy | orchard_lite | orchard_demo | orchard_demo_monsoon (default legacy)
+    seed: ""                # NANDI_SEED         world seed (default 7)
+    crops: ""               # NANDI_CROPS        legacy world crop count
+    terrain: ""             # NANDI_TERRAIN      legacy world terrain (flat | rough); leave empty for orchard worlds
+    bund_h: ""              # NANDI_BUND_H
+    dt: ""                  # NANDI_DT           physics timestep
+    actors: ""              # NANDI_ACTORS
+    season: ""              # NANDI_SEASON
+    trees_config: ""        # NANDI_TREES_CONFIG
+    crops_config: ""        # NANDI_CROPS_CONFIG
+    tools: ""               # NANDI_TOOLS
+    tool_mount: ""          # NANDI_TOOL_MOUNT
+    cut: ""                 # NANDI_CUT
+    mast_h: ""              # NANDI_MAST_H
+    wind: ""                # NANDI_WIND
+    weather: ""             # NANDI_WEATHER
+    gnss: ""                # NANDI_GNSS
+    link: ""                # NANDI_LINK
+    imu_noise: ""           # NANDI_IMU_NOISE
+    energy_card: ""         # NANDI_ENERGY_CARD
+    recovery: ""            # NANDI_RECOVERY
+    dock_charge_x: ""       # NANDI_DOCK_CHARGE_X
+    hal_backend: ""         # NANDI_HAL_BACKEND
+    hal_config: ""          # NANDI_HAL_CONFIG
+    site_file: ""           # NANDI_SITE_FILE
+    safety_config: ""       # NANDI_SAFETY_CONFIG
+    perception_orchard: ""  # NANDI_PERCEPTION_ORCHARD
+    beacon_config: ""       # NANDI_BEACON_CONFIG
+    runs_dir: ""            # NANDI_RUNS_DIR
+    estop_state: ""         # NANDI_ESTOP_STATE  e-stop latch file
+    field_mode: ""          # NANDI_FIELD_MODE   1 = field mode (console tokens required)
+    novnc: ""               # NANDI_NOVNC        0 = no noVNC desktop (person actors allowed)
+
+nandi_sim_runner:
+  ros__parameters:
+    headless: ""            # NANDI_HEADLESS     1 = no MuJoCo viewer
+
+nandi_web_bridge:
+  ros__parameters:
+    web_host: ""            # NANDI_WEB_HOST     default 127.0.0.1 (docker/start.sh exports 0.0.0.0)
+    web_port: ""            # NANDI_WEB_PORT     default 8080
+    web_allowed_hosts: ""   # NANDI_WEB_ALLOWED_HOSTS
+    missions_dir: ""        # NANDI_MISSIONS_DIR
+    audit_log: ""           # NANDI_AUDIT_LOG
+    sim_local_link: ""      # NANDI_SIM_LOCAL_LINK
+
+nandi_stability_monitor:
+  ros__parameters:
+    payload_kg: ""          # NANDI_PAYLOAD_KG
+    mast_head_kg: ""        # NANDI_MAST_HEAD_KG
+
+nandi_telemetry_bridge:
+  ros__parameters:
+    telemetry_config: ""    # NANDI_TELEMETRY_CONFIG
+    mqtt_url: ""            # NANDI_MQTT_URL
+
+nandi_run_recorder:
+  ros__parameters:
+    telemetry_config: ""    # NANDI_TELEMETRY_CONFIG
+    mqtt_url: ""            # NANDI_MQTT_URL

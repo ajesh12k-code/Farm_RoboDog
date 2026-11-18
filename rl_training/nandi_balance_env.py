@@ -8,6 +8,14 @@ from disturbance_manager import BalanceDisturbanceManager  # Import terrain & pu
 from balance_reward import compute_arm_balance_reward  # Import rest-aware balance reward
 
 
+def policy_tip_site_id(model):
+    """Arm end point the policy observes: site policy_tip (gripper_tip's original 0.065 m position, kept
+    when the harvest gripper was lengthened) so new and old policies share one observation; same rule
+    as atharv_nandi/core/rl_balance_policy.policy_tip_site_id."""
+    sid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "policy_tip")
+    return sid if sid >= 0 else mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "gripper_tip")
+
+
 class NandiArmBalanceEnv(gym.Env):
     """
     23-DOF Gymnasium environment where AtharvNandi keeps its dorsal arm
@@ -27,7 +35,7 @@ class NandiArmBalanceEnv(gym.Env):
         model_path = os.path.abspath(
             os.path.join(
                 os.path.dirname(__file__),
-                "../sim/models/AtharvNandi/atharv_nandi.xml",
+                "../atharv_nandi/sim/models/AtharvNandi/atharv_nandi.xml",
             )
         )
         self.model = mujoco.MjModel.from_xml_path(model_path)
@@ -35,9 +43,9 @@ class NandiArmBalanceEnv(gym.Env):
         # Initialize disturbance manager for uneven ridges and lateral pushes
         self.disturbances = BalanceDisturbanceManager(self.model)
 
-        # Look up IDs for trunk body and end-effector gripper_tip site
+        # Look up IDs for trunk body and the arm end point the policy observes (see policy_tip_site_id)
         self.trunk_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "trunk")
-        self.tip_site_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SITE, "gripper_tip")
+        self.tip_site_id = policy_tip_site_id(self.model)
 
         # 50 Hz policy frequency (10 sub-steps * 0.002 s = 0.02 s)
         self.frame_skip = 10

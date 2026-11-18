@@ -1,0 +1,525 @@
+<mujoco model="AtharvNandi">
+  <!-- Physics alignment v1 (orchard target, 2026-11-17). Every physical number below carries a tag:
+       MEASURED (headless run, tools/physics/*), CITED (source), DERIVED (arithmetic shown) or ASSUMED.
+       Mass budget (DERIVED, kg): trunk body 15.45 + gantry carriage 0.35 = 15.8; dorsal basket 0.9;
+       arm chain after the carriage 1.6; 6 legs x 2.25 = 13.5. Total 31.8 (= atharv_nandi_v1.xml).
+       WP1 joint-less additions +2.585 (crown mast system 2.325 incl. beacon, rack 0.12, tray/cradle 0.040, bumper,
+       belly rests, e-stop heads, marks, antennas, ballast; table in the WP1 contract notes; ORCHARD-MVP-SPEC 2.6
+       budget mast <= 2.4 + rack/beacon/bumper/tray 0.2 = 2.6). Total 34.385.
+       qpos layout is frozen: robot qpos[0:32], crop_item_1 at qpos[32:39]; ctrl order == qpos[7:32]. -->
+  <compiler angle="radian" autolimits="true"/>
+  <!-- cone elliptic + impratio 10: friction no longer drives normal penetration; same cost as pyramidal
+       (MEASURED 45 vs 46 us/step, contact audit c98754d). timestep 0.002 is the default; 0.004 only via
+       NANDI_DT (farm_scene) for STANDING / stop-and-shoot scans: walking at 0.004 is not gated (MEASURED 10 kg flat
+       walk 2 calf-floor ticks, turn up to 10.1 mm foot penetration; 0 ticks at 0.002; review F6). -->
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicitfast" cone="elliptic" impratio="10"/>
+
+  <default>
+    <!-- Joint damping 1.5 Nm.s/rad: ASSUMED. Armature 0.02 kg.m^2: ASSUMED.
+         TODO(armature): set to rotor_inertia * N^2 once the AK80-64 datasheet rotor inertia is obtained. -->
+    <joint damping="1.5" armature="0.02"/>
+    <!-- Friction 0.8 / 0.02 / 0.01: ASSUMED dry orchard soil against rubber. -->
+    <geom friction="0.8 0.02 0.01" rgba="0.2 0.55 0.25 1"/>
+    <!-- WP1 (ORCHARD-MVP-SPEC 2.5 ray groups; MVP-SPEC 2.4): every visible robot geom is in geom group 2 and
+         every mass-only robot geom in group 5, so the safety rays {0, 1} and the coverage rays {0, 1, 3} pass
+         through the robot. Applied as childclass of the trunk; the classes below that robot geoms name
+         explicitly inherit it. World geoms keep group 0 (ground) and 1 (produce). Group 2 is visible by
+         default, so the viewer and the browser draw the same robot geoms as before (plus the WP1 additions). -->
+    <default class="robot">
+      <geom group="2"/>
+      <!-- Mass-only sub-geoms (motors, battery, electronics): no collision, so the contact set is unchanged.
+           Group 2 (robot) with alpha 0 (was group 3): ORCHARD-MVP-SPEC 2.5 gives group 3 to foliage (coverage rays
+           {0, 1, 3} hit it) and group 5 to query-only world geoms (foliage envelope, rope lines: crown strike and
+           alley clearance), so a hidden motor in either would be a false hit. Group 2 is the robot group that safety
+           and coverage masks already exclude; alpha 0 keeps them out of the viewer, the browser scene (web_scene
+           skips alpha 0) and the wind drag (wind_model skips alpha 0). Not in groups 0/1. -->
+      <default class="mass_only">
+        <geom contype="0" conaffinity="0" group="2" rgba="0.1 0.1 0.12 0"/>
+      </default>
+      <!-- Finger pads: stiff, high-priority contact so a pinched crop does not creep out of the grip.
+           With MuJoCo's default soft contact (solimp 0.9 0.95) friction is regularised and a 7 cm crop
+           slid down through the pads at ~8 cm/s regardless of grip force, falling out mid-carry.
+           priority=1 makes these params win over the crop's; solimp 0.995 cuts the creep to < 1 mm/s. -->
+      <default class="finger_pad">
+        <geom priority="1" solref="0.005 1" solimp="0.995 0.999 0.001" friction="1.2 0.02 0.01"/>
+      </default>
+      <!-- Basket floor and walls: stiff contact so a resting crop does not sink or creep (contact audit). -->
+      <default class="basket">
+        <geom solref="0.005 1" solimp="0.95 0.99 0.001" rgba="0.85 0.65 0.2 1"/>
+      </default>
+      <!-- WP1 joint-less additions that must never push anything: crown mast, ring, crown head, rack,
+           beacon, e-stop heads, lift-point marks, antennas. contype 0 / conaffinity 0 (OS 2.3: no contact
+           impulse from the mast or the head can reach the robot; strikes are geometric, WP24). -->
+      <default class="wp1_nc">
+        <geom contype="0" conaffinity="0" rgba="0.55 0.57 0.6 1"/>
+      </default>
+      <!-- WP1 desap tray cells, compartment divider and papaya cradle pads: contype 0, conaffinity 4
+           ("tray bit"). A fruit collides with them only if its contype has bit 4 set (WP3 sets it on the
+           fruit it places); the legacy crops (contype 1) and the arm (contype 1) pass through, so the legacy
+           drop into the left channel is unchanged. -->
+      <default class="tray">
+        <geom contype="0" conaffinity="4" solref="0.005 1" solimp="0.95 0.99 0.001" rgba="0.92 0.9 0.82 1"/>
+      </default>
+    </default>
+    <!-- Leg actuator class: AK80-64 (CITED: rated 48 Nm, peak 120 Nm, rated speed ~4.2-5.0 rad/s;
+         store.tmotor.com goods-1202, robotshop cubemars ak80-64, 2026-11-17). Position servo kp 300 / kv 6:
+         removes the 34-48 mm tripod sag of kp 120 (MEASURED mass-load M14) and is above the kp 240 that held a
+         3 m mast at 10 deg nose-up (MEASURED mounting H). forcerange +-100: peak derated from 120 (DERIVED).
+         The 5 rad/s speed cap is a target rate limit in controllers/tripod_gait.py (a position actuator
+         cannot cap velocity); the 48 Nm continuous limit is reported (RMS), not clamped.
+         Upgrade path: kp 480 / kv 8 (saturates 10-38 % of samples at fr 48, MEASURED mass-load). -->
+    <default class="leg_motor">
+      <position kp="300" kv="6" ctrlrange="-2.8 2.8" forcerange="-100 100"/>
+    </default>
+    <!-- Invisible mount / sensor sites (alpha 0). -->
+    <default class="mount">
+      <site size="0.006" rgba="1 1 1 0"/>
+    </default>
+  </default>
+
+  <asset>
+    <texture type="2d" name="farm_soil" builtin="checker" width="512" height="512" rgb1="0.24 0.18 0.12" rgb2="0.28 0.21 0.14"/>
+    <material name="soil_mat" texture="farm_soil" texrepeat="12 12" reflectance="0.05"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 4" dir="0 0 -1" diffuse="0.95 0.95 0.9"/>
+    <!-- solref 0.01 1: hard orchard ground (MEASURED 0.70 mm standing penetration with elliptic cones). -->
+    <geom name="floor" type="plane" size="25 25 0.1" material="soil_mat" solref="0.01 1"/>
+
+    <!-- Uneven Farm Terrain Test Bumps -->
+    <geom name="ridge_1" type="box" pos="1.4 0 0.02" size="0.15 1.5 0.02" rgba="0.3 0.22 0.15 1"/>
+    <geom name="ridge_2" type="box" pos="2.2 0 0.03" size="0.18 1.5 0.03" rgba="0.3 0.22 0.15 1"/>
+
+    <!-- Main Hexapod Chassis FIRST so qpos[0..6] is trunk root -->
+    <body name="trunk" pos="0 0 0.34" childclass="robot">
+      <freejoint name="root"/>
+      <!-- Frame / shell 5.0 kg (ASSUMED), the collision box of the trunk. -->
+      <geom name="trunk_geom" type="box" size="0.34 0.14 0.05" mass="5.0" rgba="0.14 0.28 0.16 1"/>
+      <!-- 6 hip-abduction motors on the trunk at the hip mounts, 0.85 kg each (CITED AK80-64 ~850 g; listings
+           disagree, 1.5 kg also seen). 6 x 0.85 = 5.1 kg (DERIVED). -->
+      <geom name="FR_hipabd_motor" class="mass_only" type="cylinder" pos="0.26 -0.095 0" euler="0 1.5708 0" size="0.045 0.025" mass="0.85"/>
+      <geom name="FL_hipabd_motor" class="mass_only" type="cylinder" pos="0.26 0.095 0" euler="0 1.5708 0" size="0.045 0.025" mass="0.85"/>
+      <geom name="MR_hipabd_motor" class="mass_only" type="cylinder" pos="0.0 -0.105 0" euler="0 1.5708 0" size="0.045 0.025" mass="0.85"/>
+      <geom name="ML_hipabd_motor" class="mass_only" type="cylinder" pos="0.0 0.105 0" euler="0 1.5708 0" size="0.045 0.025" mass="0.85"/>
+      <geom name="RR_hipabd_motor" class="mass_only" type="cylinder" pos="-0.26 -0.095 0" euler="0 1.5708 0" size="0.045 0.025" mass="0.85"/>
+      <geom name="RL_hipabd_motor" class="mass_only" type="cylinder" pos="-0.26 0.095 0" euler="0 1.5708 0" size="0.045 0.025" mass="0.85"/>
+      <!-- Battery 3.2 kg: 500 Wh Li-ion at ~155 Wh/kg pack (ASSUMED), low and forward so the home CoM sits over
+           the 6-foot support centroid (spec: |CoM x - centroid x| <= 0.010 m).
+           WP1: moved forward from x 0.06 to 0.11 to keep that rule after the 2.3 kg crown mast at x -0.30
+           (MEASURED home CoM x -0.0072 m vs foot centroid 0.0; without the move -0.0118, rule broken). The rough
+           clod walks of AT3 are sensitive to this placement (MEASURED: x 0.09-0.11 pass every AT3 gate; 0.08
+           and 0.13 slow rough seeds 2/6 below the 0.20 m/s floor), so 0.11 is the chosen point, not a free knob.
+           Electronics raised from z 0.0 to 0.025 so the two boxes do not overlap. -->
+      <geom name="battery" class="mass_only" type="box" pos="0.11 0 -0.025" size="0.10 0.07 0.022" mass="3.2"/>
+      <!-- Compute + electronics 1.5 kg (ASSUMED). -->
+      <geom name="electronics" class="mass_only" type="box" pos="0.10 0 0.025" size="0.07 0.06 0.02" mass="1.5"/>
+
+      <!-- Mount sites (body trunk). B owns the ratings table (controllers/load_model.py). -->
+      <site name="imu" class="mount" pos="0 0 0"/>
+      <site name="head_cam" class="mount" pos="0.35 0 0.06"/>
+      <site name="mast_base" class="mount" pos="0.03 0 0.05"/>
+      <site name="front_mount" class="mount" pos="0.34 0 0"/>
+      <site name="rear_mount" class="mount" pos="-0.34 0 0"/>
+      <site name="tow_dock" class="mount" pos="-0.34 0 -0.03"/>
+
+      <!-- ================= WP1 joint-less robot additions (ORCHARD-MVP-SPEC 2.3-2.6, MVP-SPEC 2.5) =================
+           Contract: WP1. No joint, no actuator: nq, nv and nu are those of atharv_nandi_v1.xml.
+           Mass added (ASSUMED component masses, DERIVED sums, kg): crown mast system 2.295 (fixed 1.495 = drive 0.40
+           + outer tube 0.35 + ring with 4 cameras and LiDAR 0.745; moving 0.80 = sections 0.15 + 0.13 + 0.12 +
+           crown head 0.40) + beacon 0.03 = 2.325 on the mast; rack 0.12; bumper 0.03; belly rests 0.04; e-stop heads
+           0.016; lift-point marks 0.008; antennas 0.005; tray + divider + cradle 0.040; ballast 0.001. Sum 2.585
+           (cap 2.6, OS 2.6).
+           Note: the trunk SITE "mast_base" at (0.03, 0, 0.05) is the physics-alignment v1 mount site of the
+           NANDI_MAST_H mock and of load_model's mast_base rating; the crown mast is the BODY "mast_base" below. -->
+
+      <!-- Crown mast (OS 2.3). Mount at trunk (-0.30, 0, 0.05): world z 0.39 at the home pose (trunk 0.34). -->
+      <body name="mast_base" pos="-0.30 0 0.05">
+        <geom name="mast_drive" class="wp1_nc" type="box" pos="0 0 0.03" size="0.04 0.04 0.03" mass="0.40" rgba="0.25 0.25 0.27 1"/>
+        <!-- Outer tube: cylinder r 0.022, mast-local z 0.06-0.67 (world 0.45-1.06 at home). -->
+        <geom name="mast_outer" class="wp1_nc" type="cylinder" pos="0 0 0.365" size="0.022 0.305" mass="0.35"/>
+        <!-- Fixed ring at mast-local 0.595: lens 0.985 m at the keyframe, 0.978 m standing (the trunk settles
+             7 mm, MEASURED), so 0.98 +- 0.01 holds in both (MVP-SPEC 2.4): 4 cameras at yaw 0/90/180/270, 25 deg down,
+             fovy 83.6 deg (100 deg HFOV at 4:3), plus the mast LiDAR origin. -->
+        <geom name="mast_ring" class="wp1_nc" type="cylinder" pos="0 0 0.595" size="0.06 0.04" mass="0.745" rgba="0.12 0.12 0.13 1"/>
+        <camera name="ring_0" pos="0.062 0 0.595" xyaxes="0 -1 0 0.4226 0 0.9063" fovy="83.6"/>
+        <camera name="ring_1" pos="0 0.062 0.595" xyaxes="1 0 0 0 0.4226 0.9063" fovy="83.6"/>
+        <camera name="ring_2" pos="-0.062 0 0.595" xyaxes="0 1 0 -0.4226 0 0.9063" fovy="83.6"/>
+        <camera name="ring_3" pos="0 -0.062 0.595" xyaxes="-1 0 0 0 -0.4226 0.9063" fovy="83.6"/>
+        <site name="mast_lidar" class="mount" pos="0 0 0.595"/>
+        <!-- Beacon: ring lamp on the outer tube just above the camera ring (world 1.028-1.052), visible from every
+             side. rgba is written by sim/hooks/beacon.py; amber at rest. -->
+        <geom name="beacon" class="wp1_nc" type="cylinder" pos="0 0 0.65" size="0.032 0.012" mass="0.03" rgba="1.0 0.62 0.05 1"/>
+        <site name="mast_top" class="mount" pos="0 0 0.67"/>
+        <!-- Three nested joint-free sections, s1 contains s2 contains s3. Each moves ext/3 along +z relative to its
+             parent by a body_pos write (WP24); at rest body_pos = 0 (stowed). Capsules mast-local z 0.05-0.65
+             (+ r): stowed world 0.42-1.06, inside the outer tube. Fully up (ext 1.60): overlap 0.087 m tube/s1 and
+             0.067 m s1/s2, s2/s3. contype 0 (class wp1_nc). -->
+        <body name="mast_s1" pos="0 0 0">
+          <geom name="mast_s1_g" class="wp1_nc" type="capsule" fromto="0 0 0.05 0 0 0.65" size="0.018" mass="0.15" rgba="0.72 0.73 0.75 1"/>
+          <body name="mast_s2" pos="0 0 0">
+            <geom name="mast_s2_g" class="wp1_nc" type="capsule" fromto="0 0 0.05 0 0 0.65" size="0.015" mass="0.13" rgba="0.78 0.79 0.81 1"/>
+            <body name="mast_s3" pos="0 0 0">
+              <geom name="mast_s3_g" class="wp1_nc" type="capsule" fromto="0 0 0.05 0 0 0.65" size="0.012" mass="0.12" rgba="0.84 0.85 0.87 1"/>
+              <site name="mast_s3_top" class="mount" pos="0 0 0.65"/>
+              <!-- Crown head: box half-size 0.06, contype 0 / conaffinity 0. Body origin = lens: 1.10 m stowed,
+                   1.10 + ext at extension ext (2.70 m at 1.60). Box bottom sits on the tube top (world 1.06). -->
+              <body name="crown_head" pos="0 0 0.71">
+                <geom name="crown_head_g" class="wp1_nc" type="box" pos="0 0 0.02" size="0.06 0.06 0.06" mass="0.36" rgba="0.15 0.16 0.18 1"/>
+                <!-- Crown camera: 320 x 240 in the perception model, fovy 60 deg, looking along trunk +x level;
+                     the gimbal is virtual (WP24/WP5 write cam_quat). -->
+                <camera name="crown_cam" pos="0.062 0 0" xyaxes="0 -1 0 0 0 1" fovy="60"/>
+                <site name="crown_ref" class="mount" pos="0 0 0"/>
+                <!-- Anemometer (wind at crown height, WP7) and the GNSS-RTK antenna (MVP-SPEC 2.5: on the mast head). -->
+                <geom name="anemometer_g" class="wp1_nc" type="cylinder" pos="0 0.035 0.105" size="0.012 0.025" mass="0.02" rgba="0.85 0.85 0.85 1"/>
+                <site name="anemometer" class="mount" pos="0 0.035 0.13"/>
+                <geom name="gnss_puck" class="wp1_nc" type="cylinder" pos="0 -0.025 0.088" size="0.03 0.008" mass="0.02" rgba="0.9 0.9 0.88 1"/>
+                <site name="gnss_antenna" class="mount" pos="0 -0.025 0.096"/>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <!-- Tool rack (OS 2.4, WP0c feasibility-report 5.5): 3 cradles on one rail on the trunk's right side,
+           rail at trunk y -0.17, z +0.26; cradle points x -0.15 (T2 CLIPPER), 0.00 (T4 TWIST), +0.15 (T5 PRUNER).
+           Posts at x +-0.13 stand clear of the hip motors (x 0 and +-0.26, r 0.045). 0.12 kg (ASSUMED). -->
+      <geom name="rack_foot_f" class="wp1_nc" type="box" pos="0.13 -0.152 0.056" size="0.012 0.022 0.006" mass="0.005"/>
+      <geom name="rack_foot_r" class="wp1_nc" type="box" pos="-0.13 -0.152 0.056" size="0.012 0.022 0.006" mass="0.005"/>
+      <geom name="rack_post_f" class="wp1_nc" type="box" pos="0.13 -0.170 0.162" size="0.008 0.008 0.100" mass="0.015"/>
+      <geom name="rack_post_r" class="wp1_nc" type="box" pos="-0.13 -0.170 0.162" size="0.008 0.008 0.100" mass="0.015"/>
+      <geom name="rack_rail" class="wp1_nc" type="box" pos="0 -0.170 0.270" size="0.20 0.012 0.010" mass="0.050"/>
+      <geom name="rack_cradle_0" class="wp1_nc" type="box" pos="-0.15 -0.180 0.240" size="0.035 0.012 0.020" mass="0.010" rgba="0.2 0.2 0.25 1"/>
+      <geom name="rack_cradle_1" class="wp1_nc" type="box" pos="0.00 -0.180 0.240" size="0.035 0.012 0.020" mass="0.010" rgba="0.2 0.2 0.25 1"/>
+      <geom name="rack_cradle_2" class="wp1_nc" type="box" pos="0.15 -0.180 0.240" size="0.035 0.012 0.020" mass="0.010" rgba="0.2 0.2 0.25 1"/>
+      <site name="cradle_T2" class="mount" pos="-0.15 -0.17 0.26"/>
+      <site name="cradle_T4" class="mount" pos="0.00 -0.17 0.26"/>
+      <site name="cradle_T5" class="mount" pos="0.15 -0.17 0.26"/>
+
+      <!-- Front bumper (MVP-SPEC 2.5): thin box ahead of the trunk front face, collidable, with a touch sensor
+           (sensor "bumper"). It sits at trunk z -0.045..0.005 (world 0.295-0.345), above the legacy crops. -->
+      <geom name="bumper" type="box" pos="0.352 0 -0.02" size="0.010 0.12 0.025" mass="0.03" rgba="0.1 0.1 0.1 1"/>
+      <site name="bumper_touch" class="mount" type="box" pos="0.352 0 -0.02" size="0.014 0.124 0.029"/>
+
+      <!-- Belly rests (MVP-SPEC 2.5 e-stop sit-down): 4 rubber pads under the trunk, collidable with the ground,
+           12 mm below the trunk box (world 0.278 at the home pose). Support polygon x +-0.215, y +-0.105. -->
+      <geom name="belly_rest_fl" type="box" pos="0.18 0.07 -0.056" size="0.035 0.035 0.006" mass="0.01" rgba="0.08 0.08 0.08 1"/>
+      <geom name="belly_rest_fr" type="box" pos="0.18 -0.07 -0.056" size="0.035 0.035 0.006" mass="0.01" rgba="0.08 0.08 0.08 1"/>
+      <geom name="belly_rest_rl" type="box" pos="-0.18 0.07 -0.056" size="0.035 0.035 0.006" mass="0.01" rgba="0.08 0.08 0.08 1"/>
+      <geom name="belly_rest_rr" type="box" pos="-0.18 -0.07 -0.056" size="0.035 0.035 0.006" mass="0.01" rgba="0.08 0.08 0.08 1"/>
+
+      <!-- Marked lift points (two-person lift / recovery after a fall): yellow marks on both side faces, between
+           the hips, plus a site each. -->
+      <geom name="lift_mark_fl" class="wp1_nc" type="box" pos="0.13 0.1405 0" size="0.02 0.0015 0.02" mass="0.002" rgba="1 0.85 0 1"/>
+      <geom name="lift_mark_fr" class="wp1_nc" type="box" pos="0.13 -0.1405 0" size="0.02 0.0015 0.02" mass="0.002" rgba="1 0.85 0 1"/>
+      <geom name="lift_mark_rl" class="wp1_nc" type="box" pos="-0.13 0.1405 0" size="0.02 0.0015 0.02" mass="0.002" rgba="1 0.85 0 1"/>
+      <geom name="lift_mark_rr" class="wp1_nc" type="box" pos="-0.13 -0.1405 0" size="0.02 0.0015 0.02" mass="0.002" rgba="1 0.85 0 1"/>
+      <site name="lift_point_fl" class="mount" pos="0.13 0.142 0"/>
+      <site name="lift_point_fr" class="mount" pos="0.13 -0.142 0"/>
+      <site name="lift_point_rl" class="mount" pos="-0.13 0.142 0"/>
+      <site name="lift_point_rr" class="mount" pos="-0.13 -0.142 0"/>
+
+      <!-- E-stop mushroom heads (MVP-SPEC 2.5) on both side faces near the rear, where a person beside the robot
+           reaches them. Visual only: in the sim the press is the console E-STOP, the phone button or the handheld. -->
+      <geom name="estop_l" class="wp1_nc" type="cylinder" pos="-0.19 0.147 0.015" euler="1.5708 0 0" size="0.022 0.007" mass="0.008" rgba="0.85 0.05 0.05 1"/>
+      <geom name="estop_r" class="wp1_nc" type="cylinder" pos="-0.19 -0.147 0.015" euler="1.5708 0 0" size="0.022 0.007" mass="0.008" rgba="0.85 0.05 0.05 1"/>
+      <site name="estop" class="mount" pos="-0.19 0 0.015"/>
+
+      <!-- Handheld e-stop receiver (OS 1.1: wireless handheld for the field supervisor, local safety link) and
+           its antenna at the rear-left corner. The input itself is the /nandi/handheld_estop topic
+           (sim/hooks/beacon.py), independent of the console. -->
+      <geom name="handheld_rx_antenna" class="wp1_nc" type="capsule" fromto="-0.33 0.10 0.05 -0.33 0.10 0.13" size="0.004" mass="0.005" rgba="0.1 0.1 0.1 1"/>
+      <site name="handheld_estop_rx" class="mount" pos="-0.33 0.10 0.13"/>
+
+      <!-- Full-Length Top Cargo Basket (0.64m long x 0.24m wide, clear of all 6 legs), 0.9 kg -->
+      <body name="dorsal_basket" pos="0 0 0.055">
+        <geom name="basket_floor" class="basket" type="box" pos="0 0 0" size="0.32 0.12 0.006" mass="0.4"/>
+        <geom name="basket_front" class="basket" type="box" pos="0.314 0 0.035" size="0.006 0.12 0.035" mass="0.1"/>
+        <geom name="basket_rear" class="basket" type="box" pos="-0.314 0 0.035" size="0.006 0.12 0.035" mass="0.1"/>
+        <geom name="basket_left_wall" class="basket" type="box" pos="0 0.114 0.035" size="0.32 0.006 0.035" mass="0.15"/>
+        <geom name="basket_right_wall" class="basket" type="box" pos="0 -0.114 0.035" size="0.32 0.006 0.035" mass="0.15"/>
+        <!-- Payload CoM reference: trunk z 0.096 = floor top 0.061 + half of the 0.07 wall (DERIVED). -->
+        <site name="basket_payload" class="mount" pos="0 0 0.041"/>
+
+        <!-- ===== WP1: desap cell tray (front) + papaya cradle (rear), OS 2.4 "Basket" =====
+             Basket frame (trunk z +0.055); floor top at basket z 0.006 (trunk 0.061). The gantry rail runs over
+             the centreline at basket z 0.070-0.090, so the cells sit in the two side lanes between the rail
+             (|y| < 0.022) and the walls (|y| > 0.108): 2 lanes x 4 cells, pitch 0.0888 m (x) x 0.086 m (y),
+             one fruit per cell, stalk-down, nothing below it. Cells fit fruit up to ~8 cm across (Amrapali HDP
+             mango, guava; ASSUMED). Divider walls 0.040 m high (ASSUMED). Class "tray": conaffinity 4 only.
+             Shade cover: not modelled (it would sit in the arm's drop path; fidelity register). -->
+        <geom name="basket_divider" class="tray" type="box" pos="-0.050 0 0.026" size="0.003 0.108 0.020" mass="0.008"/>
+        <geom name="tray_lane_wall_l" class="tray" type="box" pos="0.1305 0.022 0.026" size="0.1775 0.002 0.020" mass="0.006"/>
+        <geom name="tray_lane_wall_r" class="tray" type="box" pos="0.1305 -0.022 0.026" size="0.1775 0.002 0.020" mass="0.006"/>
+        <geom name="tray_div_l0" class="tray" type="box" pos="0.0418 0.065 0.026" size="0.002 0.043 0.020" mass="0.002"/>
+        <geom name="tray_div_l1" class="tray" type="box" pos="0.1306 0.065 0.026" size="0.002 0.043 0.020" mass="0.002"/>
+        <geom name="tray_div_l2" class="tray" type="box" pos="0.2194 0.065 0.026" size="0.002 0.043 0.020" mass="0.002"/>
+        <geom name="tray_div_r0" class="tray" type="box" pos="0.0418 -0.065 0.026" size="0.002 0.043 0.020" mass="0.002"/>
+        <geom name="tray_div_r1" class="tray" type="box" pos="0.1306 -0.065 0.026" size="0.002 0.043 0.020" mass="0.002"/>
+        <geom name="tray_div_r2" class="tray" type="box" pos="0.2194 -0.065 0.026" size="0.002 0.043 0.020" mass="0.002"/>
+        <!-- Cell sites: fruit centre 0.040 m above the floor top. Cells 0-3 left lane front-to-back... ordered
+             by x ascending; 4-7 right lane. -->
+        <site name="tray_cell_0" class="mount" pos="-0.0026 0.065 0.046"/>
+        <site name="tray_cell_1" class="mount" pos="0.0862 0.065 0.046"/>
+        <site name="tray_cell_2" class="mount" pos="0.1750 0.065 0.046"/>
+        <site name="tray_cell_3" class="mount" pos="0.2638 0.065 0.046"/>
+        <site name="tray_cell_4" class="mount" pos="-0.0026 -0.065 0.046"/>
+        <site name="tray_cell_5" class="mount" pos="0.0862 -0.065 0.046"/>
+        <site name="tray_cell_6" class="mount" pos="0.1750 -0.065 0.046"/>
+        <site name="tray_cell_7" class="mount" pos="0.2638 -0.065 0.046"/>
+        <!-- Papaya cradle: two padded rails along x in the rear-left lane (behind the divider, ahead of the
+             mast at x -0.30), one papaya lying along x (one per trip, OS 2.4). A papaya wider than ~9 cm
+             touches the rail's edge (|y| 0.022) above basket z 0.07: geometric note, WP3 places it. -->
+        <geom name="papaya_cradle_l" class="tray" type="box" pos="-0.165 0.092 0.018" size="0.095 0.006 0.012" mass="0.004" rgba="0.3 0.3 0.32 1"/>
+        <geom name="papaya_cradle_r" class="tray" type="box" pos="-0.165 0.038 0.018" size="0.095 0.006 0.012" mass="0.004" rgba="0.3 0.3 0.32 1"/>
+        <site name="papaya_cradle" class="mount" pos="-0.165 0.065 0.061"/>
+        <!-- Ballast: joint-less carrier of the delivered (kinematically transferred) payload mass. WP3 writes
+             body_mass / body_ipos here (sum of delivered fruit, cap 3 kg); 1 g at rest. -->
+        <body name="ballast" pos="0 0 0.041">
+          <inertial pos="0 0 0" mass="0.001" diaginertia="1e-7 1e-7 1e-7"/>
+        </body>
+      </body>
+
+      <!-- Elevated Dorsal Gantry Rail above the top basket.
+           Rail + pillars 0.65 kg + carriage 0.35 kg = 1.0 kg (ASSUMED).
+           WP1 (WP0c change request, feasibility-report 5.1): the crown mast stands at trunk x -0.30, so the rail
+           now ends at x -0.262 (was -0.326) and the rear pillar moved to x -0.245 (was -0.314); masses are
+           unchanged. The carriage at gantry -0.26 (centre -0.21, rear edge -0.252) is still on the rail; the
+           mast tube (r 0.022, front edge -0.278) clears the rail end by 16 mm. -->
+      <geom name="gantry_pillar_front" type="box" pos="0.314 0 0.11" size="0.012 0.025 0.025" mass="0.1" rgba="0.35 0.37 0.4 1"/>
+      <geom name="gantry_pillar_rear" type="box" pos="-0.245 0 0.11" size="0.012 0.025 0.025" mass="0.1" rgba="0.35 0.37 0.4 1"/>
+      <geom name="gantry_rail" type="box" pos="0.032 0 0.135" size="0.294 0.022 0.01" mass="0.45" rgba="0.4 0.42 0.45 1"/>
+
+      <!-- Sliding Carriage + Extended Ground-Reaching 4-DOF Harvesting Arm (0.34m + 0.34m).
+           Arm chain after the carriage 1.6 kg (ASSUMED, heavier servos): turret 0.75 (yaw motor + shoulder
+           motor, so the shoulder motor mass is not in the upper arm), upper arm 0.35, forearm 0.30 (incl. the
+           wrist servo), wrist/palm 0.15, fingers 2 x 0.025.
+           No body gravcomp: MuJoCo applies body gravcomp to every DoF above the body, including the root
+           freejoint (actuatorgravcomp only reroutes the arm hinges), which gave the chassis +8.3 N of free lift
+           and hid the arm's tipping moment (review F1, MEASURED). Gravity is fed forward instead as a
+           position-target offset tau_g / kp (arm_ik_solver.gravity_offsets via mj_rne, used by harvest_logic),
+           so the arm motors carry the full gravity torque and /nandi/joint_states effort reports it. -->
+      <body name="arm_carriage" pos="0.05 0 0.155">
+        <joint name="gantry_slide" type="slide" axis="1 0 0" range="-0.26 0.26" damping="10.0" actuatorfrcrange="-80 80"/>
+        <geom type="box" size="0.042 0.038 0.015" mass="0.35" rgba="0.9 0.45 0.1 1"/>
+
+        <body name="arm_turret" pos="0 0 0.022">
+          <joint name="arm_yaw" type="hinge" axis="0 0 1" range="-3.14 3.14" actuatorfrcrange="-15 15"/>
+          <geom type="cylinder" size="0.03 0.018" mass="0.75" rgba="0.2 0.2 0.22 1"/>
+
+          <body name="arm_upper" pos="0 0 0.018">
+            <joint name="arm_shoulder" type="hinge" axis="0 1 0" range="-1.6 2.4" actuatorfrcrange="-30 30"/>
+            <geom type="capsule" fromto="0 0 0 0 0 0.34" size="0.019" mass="0.35" rgba="0.9 0.45 0.1 1"/>
+
+            <body name="arm_forearm" pos="0 0 0.34">
+              <joint name="arm_elbow" type="hinge" axis="0 1 0" range="-2.6 2.6" actuatorfrcrange="-15 15"/>
+              <geom type="capsule" fromto="0 0 0 0.34 0 0" size="0.015" mass="0.30" rgba="0.25 0.25 0.28 1"/>
+
+              <body name="arm_wrist" pos="0.34 0 0">
+                <joint name="arm_wrist_pitch" type="hinge" axis="0 1 0" range="-2.0 2.0" actuatorfrcrange="-5 5"/>
+                <!-- Palm + fingers sit 4 cm further out than the first design (palm 0.09 m, tip 0.105 m from
+                     the wrist pivot): with the 0.065 m gripper a ground pick needed the shoulder ~10 deg below
+                     horizontal, where the upper arm rests on its own gantry carriage (contact from 1.71 rad),
+                     so the tip stopped short and high and the pads missed the crop. The longer gripper picks
+                     a crop 0.62 m ahead at shoulder ~1.62 rad, clear of the carriage. -->
+                <geom name="gripper_palm" type="box" pos="0.045 0 0" size="0.045 0.035 0.015" mass="0.15" rgba="0.9 0.45 0.1 1"/>
+                <site name="gripper_tip" pos="0.105 0 0" size="0.008" rgba="1 0 0 1"/>
+                <!-- Where gripper_tip was before the longer gripper (0.065 m from the wrist pivot). The RL balance
+                     policy observes and is rewarded on this point (rl_balance_policy.POLICY_TIP_SITE), so
+                     existing PPO policies see exactly the observation they were trained on. Invisible. -->
+                <site name="policy_tip" pos="0.065 0 0" size="0.002" rgba="0 0 0 0"/>
+                <!-- Wrist camera mount (matches camera_rig wrist_pos_body) and tool flange (load cell). -->
+                <site name="wrist_cam" class="mount" pos="0.02 0 0.03"/>
+                <site name="tool_flange" class="mount" pos="0.09 0 0"/>
+                <!-- WP1 TCP rangefinder (MVP-SPEC 2.4): ToF point sensor on the gripper TCP axis (site +z = arm_wrist +x);
+                     it ranges between the finger pads (mj_ray at the control rate, see the sensor block). -->
+                <site name="tcp_range" class="mount" pos="0.105 0 0" euler="0 1.5708 0"/>
+
+                <body name="finger_left" pos="0.09 0.05 0">
+                  <joint name="finger_left_joint" type="slide" axis="0 -1 0" range="0.0 0.04" damping="2.0"/>
+                  <geom name="finger_left_pad" class="finger_pad" type="box" pos="0.03 0 0" size="0.035 0.005 0.012" mass="0.025" rgba="0.15 0.15 0.15 1"/>
+                </body>
+                <body name="finger_right" pos="0.09 -0.05 0">
+                  <joint name="finger_right_joint" type="slide" axis="0 1 0" range="0.0 0.04" damping="2.0"/>
+                  <geom name="finger_right_pad" class="finger_pad" type="box" pos="0.03 0 0" size="0.035 0.005 0.012" mass="0.025" rgba="0.15 0.15 0.15 1"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <!-- ================= 6 LOCOMOTION LEGS =================
+           Per leg (moving mass 2.25 kg, DERIVED): hip body 1.85 kg = thigh motor + coaxial knee motor
+           (2 x 0.85, CITED AK80-64 ~850 g; the knee is driven by a linkage/belt, no motor at the knee) + 0.15
+           bracket (ASSUMED), with the motor CoM at the thigh joint; thigh link 0.25 kg CFRP/Al tube (ASSUMED);
+           calf link 0.12 kg + rubber foot 0.03 kg (ASSUMED). Inertias are MuJoCo geometry-derived from these
+           sub-geom masses. -->
+      <!-- 1. Front-Right (FR) -->
+      <body name="FR_hip" pos="0.26 -0.14 0">
+        <joint name="FR_hip_joint" type="hinge" axis="1 0 0" range="-0.7 0.7"/>
+        <geom type="cylinder" fromto="0 0 0 0 -0.065 0" size="0.035" mass="0.15"/>
+        <geom name="FR_knee_thigh_motors" class="mass_only" type="cylinder" fromto="0 -0.04 0 0 -0.09 0" size="0.045" mass="1.7"/>
+        <body name="FR_thigh" pos="0 -0.065 0">
+          <joint name="FR_thigh_joint" type="hinge" axis="0 1 0" range="-1.5 2.5"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.026" mass="0.25"/>
+          <body name="FR_calf" pos="0 0 -0.23">
+            <joint name="FR_calf_joint" type="hinge" axis="0 1 0" range="-2.6 -0.5"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.021" mass="0.12" rgba="0.85 0.45 0.1 1"/>
+            <geom name="FR_foot" type="sphere" pos="0 0 -0.23" size="0.03" mass="0.03" rgba="0.1 0.1 0.1 1"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- 2. Front-Left (FL) -->
+      <body name="FL_hip" pos="0.26 0.14 0">
+        <joint name="FL_hip_joint" type="hinge" axis="1 0 0" range="-0.7 0.7"/>
+        <geom type="cylinder" fromto="0 0 0 0 0.065 0" size="0.035" mass="0.15"/>
+        <geom name="FL_knee_thigh_motors" class="mass_only" type="cylinder" fromto="0 0.04 0 0 0.09 0" size="0.045" mass="1.7"/>
+        <body name="FL_thigh" pos="0 0.065 0">
+          <joint name="FL_thigh_joint" type="hinge" axis="0 1 0" range="-1.5 2.5"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.026" mass="0.25"/>
+          <body name="FL_calf" pos="0 0 -0.23">
+            <joint name="FL_calf_joint" type="hinge" axis="0 1 0" range="-2.6 -0.5"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.021" mass="0.12" rgba="0.85 0.45 0.1 1"/>
+            <geom name="FL_foot" type="sphere" pos="0 0 -0.23" size="0.03" mass="0.03" rgba="0.1 0.1 0.1 1"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- 3. Middle-Right (MR) -->
+      <body name="MR_hip" pos="0.0 -0.15 0">
+        <joint name="MR_hip_joint" type="hinge" axis="1 0 0" range="-0.7 0.7"/>
+        <geom type="cylinder" fromto="0 0 0 0 -0.065 0" size="0.035" mass="0.15"/>
+        <geom name="MR_knee_thigh_motors" class="mass_only" type="cylinder" fromto="0 -0.04 0 0 -0.09 0" size="0.045" mass="1.7"/>
+        <body name="MR_thigh" pos="0 -0.065 0">
+          <joint name="MR_thigh_joint" type="hinge" axis="0 1 0" range="-1.5 2.5"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.026" mass="0.25"/>
+          <body name="MR_calf" pos="0 0 -0.23">
+            <joint name="MR_calf_joint" type="hinge" axis="0 1 0" range="-2.6 -0.5"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.021" mass="0.12" rgba="0.85 0.45 0.1 1"/>
+            <geom name="MR_foot" type="sphere" pos="0 0 -0.23" size="0.03" mass="0.03" rgba="0.1 0.1 0.1 1"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- 4. Middle-Left (ML) -->
+      <body name="ML_hip" pos="0.0 0.15 0">
+        <joint name="ML_hip_joint" type="hinge" axis="1 0 0" range="-0.7 0.7"/>
+        <geom type="cylinder" fromto="0 0 0 0 0.065 0" size="0.035" mass="0.15"/>
+        <geom name="ML_knee_thigh_motors" class="mass_only" type="cylinder" fromto="0 0.04 0 0 0.09 0" size="0.045" mass="1.7"/>
+        <body name="ML_thigh" pos="0 0.065 0">
+          <joint name="ML_thigh_joint" type="hinge" axis="0 1 0" range="-1.5 2.5"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.026" mass="0.25"/>
+          <body name="ML_calf" pos="0 0 -0.23">
+            <joint name="ML_calf_joint" type="hinge" axis="0 1 0" range="-2.6 -0.5"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.021" mass="0.12" rgba="0.85 0.45 0.1 1"/>
+            <geom name="ML_foot" type="sphere" pos="0 0 -0.23" size="0.03" mass="0.03" rgba="0.1 0.1 0.1 1"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- 5. Rear-Right (RR) -->
+      <body name="RR_hip" pos="-0.26 -0.14 0">
+        <joint name="RR_hip_joint" type="hinge" axis="1 0 0" range="-0.7 0.7"/>
+        <geom type="cylinder" fromto="0 0 0 0 -0.065 0" size="0.035" mass="0.15"/>
+        <geom name="RR_knee_thigh_motors" class="mass_only" type="cylinder" fromto="0 -0.04 0 0 -0.09 0" size="0.045" mass="1.7"/>
+        <body name="RR_thigh" pos="0 -0.065 0">
+          <joint name="RR_thigh_joint" type="hinge" axis="0 1 0" range="-1.5 2.5"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.026" mass="0.25"/>
+          <body name="RR_calf" pos="0 0 -0.23">
+            <joint name="RR_calf_joint" type="hinge" axis="0 1 0" range="-2.6 -0.5"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.021" mass="0.12" rgba="0.85 0.45 0.1 1"/>
+            <geom name="RR_foot" type="sphere" pos="0 0 -0.23" size="0.03" mass="0.03" rgba="0.1 0.1 0.1 1"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- 6. Rear-Left (RL) -->
+      <body name="RL_hip" pos="-0.26 0.14 0">
+        <joint name="RL_hip_joint" type="hinge" axis="1 0 0" range="-0.7 0.7"/>
+        <geom type="cylinder" fromto="0 0 0 0 0.065 0" size="0.035" mass="0.15"/>
+        <geom name="RL_knee_thigh_motors" class="mass_only" type="cylinder" fromto="0 0.04 0 0 0.09 0" size="0.045" mass="1.7"/>
+        <body name="RL_thigh" pos="0 0.065 0">
+          <joint name="RL_thigh_joint" type="hinge" axis="0 1 0" range="-1.5 2.5"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.026" mass="0.25"/>
+          <body name="RL_calf" pos="0 0 -0.23">
+            <joint name="RL_calf_joint" type="hinge" axis="0 1 0" range="-2.6 -0.5"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.23" size="0.021" mass="0.12" rgba="0.85 0.45 0.1 1"/>
+            <geom name="RL_foot" type="sphere" pos="0 0 -0.23" size="0.03" mass="0.03" rgba="0.1 0.1 0.1 1"/>
+          </body>
+        </body>
+      </body>
+    </body>
+
+    <!-- Test Produce Item on Ground in front of robot (0.15 kg sphere r 0.035: ground placeholder).
+         condim 6 + rolling friction 0.02: the 200 mm free-rolling drift drops to 2.5 mm (MEASURED, contact
+         audit c98754d). Friction 0.8 / 0.05 / 0.02 ASSUMED. -->
+    <body name="crop_item_1" pos="0.62 0.0 0.035">
+      <freejoint name="crop_freejoint"/>
+      <!-- group 1 = produce (WP1 ray groups, OS 2.5): safety and coverage rays see it. -->
+      <geom type="sphere" size="0.035" mass="0.15" rgba="0.9 0.15 0.15 1" condim="6" friction="0.8 0.05 0.02" group="1"/>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <!-- Dorsal Gantry & Arm Actuators (Indices 0..6) -->
+    <!-- gantry_slide: kp 2000 / kv 60, +-80 N (ASSUMED belt drive; removes the 19 mm slide under 2 kg, MEASURED). -->
+    <position name="gantry_slide" joint="gantry_slide" kp="2000" kv="60" ctrlrange="-0.26 0.26" forcerange="-80 80"/>
+    <!-- arm_yaw: RMD-X8-25 class (CITED peak 25 / rated 10 Nm), +-15 Nm. -->
+    <position name="arm_yaw" joint="arm_yaw" kp="150" kv="6" ctrlrange="-3.14 3.14" forcerange="-15 15"/>
+    <!-- arm_shoulder: RMD-X8-25 / GO-M8010 class (GO-M8010-6 CITED max 23.7 Nm, so X8-25-class peak), +-30 Nm.
+         MEASURED need 18.07 Nm at full reach with 2 kg (mass-load M10). -->
+    <position name="arm_shoulder" joint="arm_shoulder" kp="300" kv="8" ctrlrange="-1.6 2.4" forcerange="-30 30"/>
+    <!-- arm_elbow: +-15 Nm (MEASURED need 9.7 Nm with 2 kg). -->
+    <position name="arm_elbow" joint="arm_elbow" kp="250" kv="6" ctrlrange="-2.6 2.6" forcerange="-15 15"/>
+    <!-- arm_wrist_pitch: Dynamixel XM540-W270 class (CITED 10.6 Nm stall at 12 V), +-5 Nm. -->
+    <position name="arm_wrist_pitch" joint="arm_wrist_pitch" kp="100" kv="3" ctrlrange="-2.0 2.0" forcerange="-5 5"/>
+    <!-- Fingers (unchanged): kp 400 squeezes a 7 cm crop with ~12 N per pad - 10x the crop's weight in friction. -->
+    <position name="finger_left" joint="finger_left_joint" kp="400" kv="4" ctrlrange="0.0 0.04" forcerange="-25 25"/>
+    <position name="finger_right" joint="finger_right_joint" kp="400" kv="4" ctrlrange="0.0 0.04" forcerange="-25 25"/>
+
+    <!-- 18 Leg Actuators (Indices 7..24), class leg_motor (AK80-64 class, see default) -->
+    <position name="FR_hip" class="leg_motor" joint="FR_hip_joint"/>
+    <position name="FR_thigh" class="leg_motor" joint="FR_thigh_joint"/>
+    <position name="FR_calf" class="leg_motor" joint="FR_calf_joint"/>
+    <position name="FL_hip" class="leg_motor" joint="FL_hip_joint"/>
+    <position name="FL_thigh" class="leg_motor" joint="FL_thigh_joint"/>
+    <position name="FL_calf" class="leg_motor" joint="FL_calf_joint"/>
+    <position name="MR_hip" class="leg_motor" joint="MR_hip_joint"/>
+    <position name="MR_thigh" class="leg_motor" joint="MR_thigh_joint"/>
+    <position name="MR_calf" class="leg_motor" joint="MR_calf_joint"/>
+    <position name="ML_hip" class="leg_motor" joint="ML_hip_joint"/>
+    <position name="ML_thigh" class="leg_motor" joint="ML_thigh_joint"/>
+    <position name="ML_calf" class="leg_motor" joint="ML_calf_joint"/>
+    <position name="RR_hip" class="leg_motor" joint="RR_hip_joint"/>
+    <position name="RR_thigh" class="leg_motor" joint="RR_thigh_joint"/>
+    <position name="RR_calf" class="leg_motor" joint="RR_calf_joint"/>
+    <position name="RL_hip" class="leg_motor" joint="RL_hip_joint"/>
+    <position name="RL_thigh" class="leg_motor" joint="RL_thigh_joint"/>
+    <position name="RL_calf" class="leg_motor" joint="RL_calf_joint"/>
+  </actuator>
+
+  <sensor>
+    <!-- IMU at the trunk origin. -->
+    <framequat name="imu_quat" objtype="site" objname="imu"/>
+    <gyro name="imu_gyro" site="imu"/>
+    <accelerometer name="imu_acc" site="imu"/>
+    <!-- Tool flange load cell: force/torque between arm_wrist (palm + fingers + tool + produce) and the forearm,
+         in the tool_flange site frame. -->
+    <force name="tool_flange_f" site="tool_flange"/>
+    <torque name="tool_flange_t" site="tool_flange"/>
+    <!-- WP1: front bumper contact (any contact force inside site bumper_touch -> stop, WP6) and the GNSS antenna
+         position (WP7 adds the RTK error model). The TCP ToF range is NOT a <rangefinder> sensor: that casts a
+         ray every physics step (MEASURED about +5 us/step on the rough world, AT8 budget 60); the consumer casts
+         mj_ray from site tcp_range along its +z at the control rate. -->
+    <touch name="bumper" site="bumper_touch"/>
+    <framepos name="gnss_pos" objtype="site" objname="gnss_antenna"/>
+  </sensor>
+
+  <keyframe>
+    <key name="home"
+         qpos="0 0 0.34 1 0 0 0  0.0 0.0 0.1 -1.8 1.4 0.0 0.0  -0.12 0.80 -1.60  0.12 0.80 -1.60  -0.12 0.80 -1.60  0.12 0.80 -1.60  -0.12 0.80 -1.60  0.12 0.80 -1.60  0.62 0.0 0.035 1 0 0 0"
+         ctrl="0.0 0.0 0.1 -1.8 1.4 0.0 0.0  -0.12 0.80 -1.60  0.12 0.80 -1.60  -0.12 0.80 -1.60  0.12 0.80 -1.60  -0.12 0.80 -1.60  0.12 0.80 -1.60"/>
+  </keyframe>
+</mujoco>

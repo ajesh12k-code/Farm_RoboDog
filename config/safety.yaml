@@ -1,0 +1,50 @@
+# Atharv Nandi safety supervisor configuration (read by sim/controllers/safety_logic.py).
+# Override the path with NANDI_SAFETY_CONFIG. Missing keys fall back to the built-in defaults.
+
+estop:
+  # Safe hold (all actuators but the fingers, which keep their commanded grip): kp x stiffness,
+  # kv x damping, plus a joint brake in N m (arm joints get half). 1.0 / 1.0 / 0 = plain hold.
+  # WP6 (P-08 stationary <= 0.5 s): 2 / 10 / 4 stops the trunk <= 0.42 s after engage at every crown
+  # extension, walking speed and gait phase measured (2 / 2 / 2 took up to 0.64 s); see the WP6 contract notes.
+  hold_stiffness_scale: 2.0
+  hold_damping_scale: 10.0
+  hold_brake_nm: 4.0
+  # estop_reset blends from the hold pose to the live targets: duration = largest move in
+  # ctrlrange units / rearm_rate, clipped to [rearm_min_s, rearm_max_s].
+  rearm_rate: 0.25
+  rearm_min_s: 1.0
+  rearm_max_s: 3.0
+  # The latch is saved here so a restarted supervisor comes back latched (launch_nandi.sh clears
+  # it for a fresh stack). Override with NANDI_ESTOP_STATE.
+  state_file: /tmp/nandi_estop_latch.json
+
+speed:
+  max_speed_scale: 1.0    # cap on /nandi/gait_params[0] (the gait itself allows up to 1.5)
+  max_cmd: 1.0            # cap on |(vx, vy)| and |yaw| of /nandi/cmd_vel
+
+geofence:
+  enabled: true
+  # Keep-in polygon in local metres (x forward from the home pose, y left), vertices in order.
+  # Default: a rectangle around the farm plot (crops x 1.0..3.6, clod field x 3.6..6.5, |y| <= 1.2).
+  # Leaving it latches the e-stop with reason 'geofence'.
+  polygon: [[-1.5, -2.0], [7.0, -2.0], [7.0, 2.0], [-1.5, 2.0]]
+  reset_margin_m: 0.1     # estop_reset after a geofence latch needs the trunk this far back inside
+
+fall:
+  tilt_deg: 35.0          # trunk tilt above this ...
+  sustain_s: 0.3          # ... for this long latches reason 'fall' (game_status.is_fallen latches at once)
+
+stale:
+  max_age_s: 0.5          # locomotion holds position when /nandi/sim_qpos is older than this
+  topics: ["/nandi/sim_qpos", "/nandi/leg_targets"]
+
+liveness:
+  max_age_s: 2.0          # a node whose /nandi/heartbeat is older than this is reported not ok
+
+# WP6 crown gates, stance rules, wind response and safety fields (ORCHARD-MVP-SPEC 2.3, 5.2; MVP-SPEC 5.3) are
+# L0 hard safety: their limits are code constants in sim/controllers/stability.py and
+# sim/controllers/safety_fields.py and are NOT read from this file (WORKFLOWS-SPEC L0: "code only, never YAML").
+# For reference: raise 6-foot >= 0.13 m, cross <= 3 deg, wind < 10 m/s; crown-up walk tripod >= 0.04 / 0.03 m,
+# <= 0.15 m/s, wind < 8 m/s, slope <= 2 deg, never across a basin rim; walking <= 5 deg; filtered tilt 6 deg,
+# instant 12 deg; fields per MVP-SPEC 5.3 scaled by the crown (protective 0.5 x lens, warning 1 x lens).
+# The measured gate table is config/crown_gates.json (tools/crown_gate_matrix.py, run ids inside).

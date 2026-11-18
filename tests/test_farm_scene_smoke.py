@@ -1,6 +1,6 @@
 import mujoco
 
-from controllers.farm_scene import crop_body_names, crop_qpos_slice, load_farm_model
+from atharv_nandi.core.farm_scene import crop_body_names, crop_qpos_slice, load_farm_model
 
 
 def test_qpos_prefix_and_crops():

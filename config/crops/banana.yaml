@@ -1,0 +1,49 @@
+# Atharv Nandi crop profile: banana (Grand Naine). WP23, ORCHARD-MVP-SPEC 4.4. Schema nandi.crop_profile/1.
+# Project decision OQ-01 A: scout + MARK only. Bunch harvest is a human cut (OQ-03 A): MARK with tool_hint human_cut.
+schema: nandi.crop_profile/1
+crop: banana
+cultivars: [Grand Naine]
+default_cultivar: Grand Naine
+mvp_scope: scout_mark
+priority: 4
+harvest_method: mark
+methods: [mark]
+tool: null
+pool_kind: none
+one_round: false
+pull_release: false
+pedicel_leave_cm: {default: 0.0, min: 0.0, max: 0.0}
+tau_detach_nm: null
+placement_speed_max_m_s: null
+bunch_exclusion_m: 3.0          # keep >= 3 m from a MARKed bunch while a human cut is in progress
+mass_kg: [22.0, 30.0]           # bunch 26.7 kg (cited)
+skin_colour_cue: false
+maturity_cues: [ribbon_age, finger_angularity]
+offrobot_checks: []
+stages:
+  - id: immature
+    harvest: false
+    days_since_shooting: [0, 89]
+    cues: {fingers: angular}
+    rgba: [0.40, 0.62, 0.20, 1.0]
+  - id: mature
+    harvest: true
+    days_since_shooting: [90, 120]   # 90-120 d after shooting (cited, NHB ban004)
+    cues: {fingers: round}
+    rgba: [0.40, 0.62, 0.20, 1.0]
+harvest_window: {basis: days_since_shooting, days: [90, 120]}
+ribbon_colours: [red, blue, yellow, white, green, black]   # one colour per shooting week (assumption)
+bagging: {used: false}
+calendar_up: {}
+prune:
+  max_stem_mm: 12
+  paste_required_mm: 12
+  window_months: []
+  jobs: [banana_tidy, banana_sanitation_deleaf, banana_desucker]
+  blade_clean_between_plants: true
+min_functional_leaves: {flowering: 9, harvest: 4}   # (assumption) pending an ICAR-NRCB / NHB package
+followers_keep: [1, 2]
+symptoms:
+  - {class: sigatoka, unit: per_leaf, bands: [mid, high], seasons: [all], scale: canopy}
+  - {class: weevil_gum, unit: trunk, bands: [low, mid], seasons: [all], scale: trunk}
+  - {class: bunchy_top, unit: per_leaf, bands: [high], seasons: [all], scale: canopy}

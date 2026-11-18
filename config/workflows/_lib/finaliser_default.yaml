@@ -1,0 +1,15 @@
+# Default finaliser for on_pause and on_abort (WORKFLOWS-SPEC A.2, A.3; WP34).
+# release_safe first: never open the jaws over the ground, a basin or a person.
+schema: nandi.workflow/1
+id: finaliser_default
+version: 1
+kind: subtree
+primitives_api: 1
+labels: {en: safe finish, hi: सुरक्षित समापन}
+root:
+  sequence:
+  - action: {do: release_safe, timeout_s: 20, labels: {en: release safe, hi: सुरक्षित छोड़ें}}
+  - action: {do: arm_park, timeout_s: 10, labels: {en: park arm, hi: भुजा पार्क}}
+  - action: {do: tools_safe, timeout_s: 10, labels: {en: tools safe, hi: औज़ार सुरक्षित}}
+  - action: {do: stow_mast, timeout_s: 9, labels: {en: stow mast, hi: मस्तूल नीचे}}
+  - action: {do: safe_hold, labels: {en: hold, hi: रुकें}}

@@ -1,0 +1,57 @@
+<!-- Atharv Nandi T4 TWIST (WP2; ORCHARD-MVP-SPEC 2.4, 3.4): soft-pad cradle jaws with a roll drive.
+     Free body (6 dof) + twist_roll hinge (+-270 deg, spec) + twist_jaw slide (opening 0-0.16 m, spec) = 8 dof.
+
+     Tool frame: origin = twist_handle_ref (locks onto tool_flange), +x = tool axis = roll axis. The jaw arms join
+     behind the fruit on a thin crossbar just past the fingers, so the jaw centre (TCP) has to clear a 0.15 m fruit
+     (radius 0.075 + 7 mm) in front of it: TCP 0.16 ahead of the handle_ref = 0.25 m from the wrist pivot. WP0c
+     assumed 0.20 m (feasibility-report section 2, "replace when WP2 lands"): change request to re-run the T4 rows.
+     One drive moves one jaw (8 dof per tool, OS 2.6): the fixed jaw's inner face is at y +0.07, the moving jaw's at
+     y = 0.07 - opening, so a fruit of width w is gripped centred at y = 0.07 - w / 2 (registry.JAW_FIXED_Y).
+     Pads (twist_jaw_a fixed, twist_jaw_b moving) collide while mounted (contype 8 / conaffinity 1) and grip the
+     fruit by friction (mu 1.2, ASSUMED soft pads); touch sensors twist_jaw_a_touch / twist_jaw_b_touch.
+     Actuators: twist_roll position kp 4, +-2 N.m (ASSUMED); twist_jaw position, ctrl = opening (m), kp 300 N/m,
+     squeeze cap 8 N (ASSUMED: friction torque about the roll axis ~ 2 x 1.2 x 8 N x 0.066 m = 1.27 N.m, above
+     tau_detach 0.3 N.m and below the 2 N.m roll cap, so the pads slip and the roll keeps turning while the stalk
+     holds: the roll gate of the twist rule counts tool roll, twist_logic). Masses ASSUMED (0.35 kg). Sensor twist_roll_pos
+     (roll jointpos, OS 2.4). -->
+<mujoco model="nandi_tool_twist">
+  <compiler angle="radian" autolimits="true"/>
+  <worldbody>
+    <body name="twist">
+      <freejoint name="twist_free"/>
+      <geom name="twist_handle" type="box" pos="0.035 0 0" size="0.035 0.010 0.012" mass="0.10"
+            contype="16" conaffinity="0" group="2" rgba="0.15 0.15 0.18 1"/>
+      <site name="twist_handle_ref" pos="0 0 0" size="0.004" group="5" rgba="0 1 1 0.5"/>
+      <body name="twist_head" pos="0.07 0 0">
+        <joint name="twist_roll" type="hinge" axis="1 0 0" range="-4.7124 4.7124" damping="0.05" armature="0.002"/>
+        <geom name="twist_frame" type="box" pos="0.004 -0.01 0" size="0.004 0.095 0.012" mass="0.08"
+              contype="16" conaffinity="0" group="2" rgba="0.2 0.45 0.75 1"/>
+        <geom name="twist_jaw_a" type="box" pos="0.069 0.074 0" size="0.061 0.004 0.03" mass="0.06"
+              contype="16" conaffinity="0" group="2" friction="1.2 0.01 0.001" solref="0.004 1"
+              rgba="0.1 0.1 0.1 1"/>
+        <site name="twist_jaw_a_touch" type="box" pos="0.069 0.0725 0" size="0.062 0.0065 0.031" group="5"
+              rgba="0 1 0 0.2"/>
+        <site name="twist_tcp" pos="0.09 0 0" size="0.003" group="5" rgba="1 0 0 0.6"/>
+        <body name="twist_jaw" pos="0 0.07 0">
+          <joint name="twist_jaw" type="slide" axis="0 -1 0" range="0 0.16" damping="2" armature="0.01"/>
+          <geom name="twist_jaw_b" type="box" pos="0.069 -0.004 0" size="0.061 0.004 0.03" mass="0.07"
+                contype="16" conaffinity="0" group="2" friction="1.2 0.01 0.001" solref="0.004 1"
+                rgba="0.1 0.1 0.1 1"/>
+          <geom name="twist_jaw_slider" type="box" pos="0.004 -0.004 0" size="0.004 0.006 0.008" mass="0.04"
+                contype="0" conaffinity="0" group="2" rgba="0.3 0.3 0.33 1"/>
+          <site name="twist_jaw_b_touch" type="box" pos="0.069 -0.0025 0" size="0.062 0.0065 0.031" group="5"
+                rgba="0 1 0 0.2"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="twist_roll" joint="twist_roll" kp="4" kv="0.3" ctrlrange="-4.7124 4.7124" forcerange="-2 2"/>
+    <position name="twist_jaw" joint="twist_jaw" kp="300" kv="8" ctrlrange="0 0.16" forcerange="-8 8"/>
+  </actuator>
+  <sensor>
+    <touch name="twist_jaw_a_touch" site="twist_jaw_a_touch"/>
+    <touch name="twist_jaw_b_touch" site="twist_jaw_b_touch"/>
+    <jointpos name="twist_roll_pos" joint="twist_roll"/>
+  </sensor>
+</mujoco>

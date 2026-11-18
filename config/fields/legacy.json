@@ -1,0 +1,8 @@
+{
+ "schema": "nandi.field/1",
+ "classification": "Public",
+ "world": "legacy",
+ "kind": "legacy",
+ "label": "legacy vegetable test field (MVP-SPEC): built by farm_scene, untouched by WP4",
+ "note": "no trees, terrain or actors here on purpose: the legacy model compiles byte-identical"
+}

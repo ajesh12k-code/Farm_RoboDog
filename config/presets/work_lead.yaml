@@ -1,0 +1,31 @@
+# WORK ASSIST: LEAD-TO-MARKS (MVP value; MISSION-PRESETS 7): lead a scout or pruner to each MARKed tree.
+schema: nandi.preset/1
+id: work_lead
+mode: lead_to_marks
+version: 1
+kind: assist
+title: "WORK: lead to MARKs"
+season: work
+crops: [mango, guava, papaya, banana]
+targets: [row_ids, tree_ids]
+crown: none
+weather: non_contact
+slope_limit_deg: 5.0
+params:
+  stop_distance_m: {default: 1.5, min: 1.0, max: 3.0}
+  wait_s: {default: 60.0, min: 5.0, max: 600.0}            # human job time per MARK (assumption)
+  v_mps: {default: 0.18, min: 0.05, max: 0.18}
+preconditions: [ready_common, job_sheet_exists, crown_stowed, slope_walk]
+steps: ["Walk to the next MARKed tree", "Stop 1.5 m from it, show the job sheet line", "Wait for the human, then next"]
+interlocks: [common, crown_stowed, stop_for_others]
+outputs: [marks_visited, time_per_job]
+kpis: [mark_trees_reached_100, stop_within_03m]
+retry: {blocked: assist}
+gates:
+  - {kind: walk, ext_m: 0.0, v_mps: $v_mps}
+estimate:
+  per_tree_s: $wait_s
+  walk_m: route_m
+  v_mps: $v_mps
+console: {tile: "WORK", icon: lead, hi: "निशान तक ले चलो", en: "Work: lead to marks", order: 21, group: work,
+          show: [stop_distance_m], advanced: [wait_s]}

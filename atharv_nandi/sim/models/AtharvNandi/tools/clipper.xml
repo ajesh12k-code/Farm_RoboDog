@@ -1,0 +1,58 @@
+<!-- Atharv Nandi T2 CLIPPER (WP2; ORCHARD-MVP-SPEC 2.4, MVP-SPEC 2.3 / 3.4): single-motor cut-and-hold scissor.
+     Free body (6 dof) + clipper_roll hinge + clipper_blade hinge = 8 dof. Composed by sim/world/modules/tools.py,
+     which places it in its rack cradle and adds the rack / grip welds and the arm <exclude> pairs.
+
+     Tool frame: origin = clipper_handle_ref, which locks onto the arm's tool_flange site (wrist x 0.09); +x is the
+     tool axis. TCP 0.11 ahead of the handle_ref = 0.20 m from the wrist pivot (WP0c TOOLS, frozen).
+     Scissor: blades in the head x-y plane, hinge axis = head z, pivot 0.05 m behind the TCP (lever 0.05, spec).
+     clipper_blade q = closing angle: 0 open (moving blade 0.6 rad toward -y), 0.6 closed (blade_b on blade_a).
+     Actuator clipper_blade: ctrl 0..1 -> q 0..0.6 rad (gear 1/0.6); forcerange 2.4 x gear = 4 N.m joint torque
+     -> 80 N at the 0.05 m cut point (spec). clipper_roll: position kp 8, +-1.57 rad (spec).
+     Contacts: parked geoms are contype 16 / conaffinity 0 (collide with nothing). When mounted, the runtime sets
+     clipper_handle and clipper_frame to contype 8 / conaffinity 1; blades, V-trap and stem clamp stay contype 0
+     (logical cut, assisted register logical_cut). Masses are ASSUMED (0.28 kg total, spec range 0.25-0.30).
+     Sensors (OS 2.4): clipper_blade_pos (blade jointpos). Site clipper_range (at the TCP, z = tool axis) is the TCP
+     rangefinder origin: hooks/tools.py casts the ray at 50 Hz while T2 is mounted (an MJCF rangefinder cost 6.4 us
+     on every physics step). The catcher has no touch sensor (contype 0; the catch is an assisted weld). -->
+<mujoco model="nandi_tool_clipper">
+  <compiler angle="radian" autolimits="true"/>
+  <worldbody>
+    <body name="clipper">
+      <freejoint name="clipper_free"/>
+      <geom name="clipper_handle" type="box" pos="0.035 0 0" size="0.035 0.010 0.012" mass="0.10"
+            contype="16" conaffinity="0" group="2" rgba="0.15 0.15 0.18 1"/>
+      <site name="clipper_handle_ref" pos="0 0 0" size="0.004" group="5" rgba="0 1 1 0.5"/>
+      <body name="clipper_head" pos="0.07 0 0">
+        <joint name="clipper_roll" type="hinge" axis="1 0 0" range="-1.5708 1.5708" damping="0.05" armature="0.002"/>
+        <geom name="clipper_frame" type="box" pos="0.006 0 0" size="0.006 0.018 0.012" mass="0.12"
+              contype="16" conaffinity="0" group="2" rgba="0.85 0.55 0.1 1"/>
+        <geom name="clipper_blade_fixed" type="box" pos="0.032 0.003 0" size="0.026 0.003 0.0012" mass="0.02"
+              contype="0" conaffinity="0" group="2" rgba="0.75 0.77 0.8 1"/>
+        <geom name="clipper_trap_l" type="capsule" fromto="0.042 0.002 0  0.07 0.022 0" size="0.0015" mass="0.005"
+              contype="0" conaffinity="0" group="2" rgba="0.2 0.2 0.22 1"/>
+        <geom name="clipper_trap_r" type="capsule" fromto="0.042 -0.002 0  0.07 -0.022 0" size="0.0015" mass="0.005"
+              contype="0" conaffinity="0" group="2" rgba="0.2 0.2 0.22 1"/>
+        <geom name="clipper_catcher" type="box" pos="0.035 -0.006 -0.005" size="0.012 0.004 0.002" mass="0.01"
+              contype="0" conaffinity="0" group="2" rgba="0.1 0.5 0.2 1"/>
+        <site name="clipper_tcp" pos="0.04 0 0" size="0.003" group="5" rgba="1 0 0 0.6"/>
+        <site name="clipper_blade_a" pos="0.04 0 0" size="0.002" group="5" rgba="1 1 0 0.6"/>
+        <site name="clipper_range" pos="0.04 0 0" quat="0.7071068 0 0.7071068 0" size="0.002" group="5"
+              rgba="0 0.6 1 0.6"/>
+        <body name="clipper_blade" pos="-0.01 0 0.0025" quat="0.955336 0 0 -0.295520">
+          <joint name="clipper_blade" type="hinge" axis="0 0 1" range="0 0.62" damping="0.05" armature="0.002"/>
+          <geom name="clipper_blade_moving" type="box" pos="0.04 -0.003 0" size="0.03 0.003 0.0012" mass="0.02"
+                contype="0" conaffinity="0" group="2" rgba="0.75 0.77 0.8 1"/>
+          <site name="clipper_blade_b" pos="0.05 0 0" size="0.002" group="5" rgba="1 0.5 0 0.6"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="clipper_roll" joint="clipper_roll" kp="8" kv="0.3" ctrlrange="-1.5708 1.5708" forcerange="-2 2"/>
+    <position name="clipper_blade" joint="clipper_blade" gear="1.6666667" kp="12" kv="0.1" ctrlrange="0 1"
+              forcerange="-2.4 2.4"/>
+  </actuator>
+  <sensor>
+    <jointpos name="clipper_blade_pos" joint="clipper_blade"/>
+  </sensor>
+</mujoco>

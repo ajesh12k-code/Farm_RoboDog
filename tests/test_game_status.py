@@ -6,8 +6,8 @@ import mujoco
 import numpy as np
 import pytest
 
-from controllers.farm_scene import ROBOT_XML, crop_body_names, crop_qpos_slice, load_farm_model
-from controllers.game_status import (
+from atharv_nandi.core.farm_scene import ROBOT_XML, crop_body_names, crop_qpos_slice, load_farm_model
+from atharv_nandi.core.game_status import (
     BASKET_FLOOR_Z,
     BASKET_HALF_X,
     BASKET_HALF_Y,

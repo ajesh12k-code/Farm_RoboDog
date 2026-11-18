@@ -1,0 +1,48 @@
+# HARVEST / PICK papaya: TWIST (T4), one per trip, jaw_clearance (MISSION-PRESETS 5). Project decision OQ-01 A: papaya is
+# scout + MARK only in the MVP; the twist runs only in the demo (OQ-11 A, OS 1.2 step 8; field season demo_all_fruiting).
+schema: nandi.preset/1
+id: harvest_papaya
+mode: harvest_tree
+version: 1
+kind: contact
+title: "HARVEST papaya (twist, one per trip; demo only)"
+season: harvest_papaya
+crops: [papaya]
+targets: [tree_ids]
+crown: none
+weather: contact
+slope_limit_deg: 3.0
+method: twist
+tool: T4
+pilot_scope: demo_only
+params:
+  method: {default: twist, enum: [twist]}
+  max_items: {default: 1, min: 1, max: 1}                  # one papaya per trip (rear cradle)
+  expected_n: {default: 1, min: 0, max: 1}
+  jaw_clearance_m: {default: 0.015, min: 0.015, max: 0.05} # jaw 0.16 m + 15 mm per side
+  tau_detach_nm: {default: 0.15, min: 0.05, max: 1.0}
+  place_speed_mps: {default: 0.5, min: 0.1, max: 0.5}      # lowered into the rear cradle at <= 0.5 m/s
+  twist_s: {default: 22.0, min: 5.0, max: 60.0}
+  tool_change_s: {default: 9.0, min: 0.0, max: 30.0}
+  fruit_kg: {default: 1.8, min: 0.5, max: 2.5}             # 1.8 kg design case (MP 5)
+preconditions: [ready_common, tool_in_rack, payload_room, no_wet_foliage, crop_profile, scout_fresh_or_inline,
+                dwell_slope, fruit_not_bagged, crop_in_mvp]
+steps:
+  - "Tool change to TWIST"
+  - "Lowest colour-break in-band fruit with jaw_clearance; soft pads; roll until release"
+  - "Lower into the rear cradle at <= 0.5 m/s; one papaya per trip"
+  - "Out-of-band or no-clearance fruit -> MARK no_clearance"
+interlocks: [blade_jaw_interlock, work_field_person, stability, no_tool_change_holding, payload_3kg, base_drift_2cm]
+outputs: [harvest_records, marks, tree_record_harvest]
+kpis: [O-10, O-12, O-15, papaya_impact_05, cycle_twist_25s]
+retry: {per_target: 1, twist_failed: mark}
+gates:
+  - {kind: dwell, ext_m: 0.0, dwell_s: $twist_s}
+estimate:
+  fixed_s: $tool_change_s
+  per_item_s: $twist_s
+  items: $expected_n
+  disk_mb: 0.5
+payload: {per_item_kg: $fruit_kg, cells: 1, cradle: rear}
+console: {tile: "HARVEST", icon: harvest, hi: "तुड़ाई पपीता", en: "Harvest papaya", order: 8, group: tree_card,
+          show: [], advanced: [jaw_clearance_m, tau_detach_nm, place_speed_mps]}

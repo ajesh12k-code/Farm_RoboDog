@@ -1,0 +1,32 @@
+# RECOVERY: E-STOP RECOVERY (MISSION-PRESETS 8): local confirm -> operator confirm -> checklist (tools safe, fields
+# clear, stability, crown brake -> retract) -> stand up -> resume from the last completed tree, never mid-cut.
+schema: nandi.preset/1
+id: estop_recovery
+mode: estop_recover
+version: 1
+kind: recovery
+title: "E-STOP RECOVERY"
+season: recovery
+crops: [mango, guava, papaya, banana]
+targets: [none]
+crown: none
+weather: exempt
+slope_limit_deg: 5.0
+float_ok: true
+ready: {relax: [estop, energy, rtk, season, weather, disk, novnc, geofence, stability, slope, cloud_link]}
+params:
+  confirm_s: {default: 5.0, min: 0.0, max: 60.0}           # scripted fixed 5 s each in the demo (run card)
+  stand_s: {default: 5.0, min: 2.0, max: 20.0}
+preconditions: [estop_engaged, both_confirmations]
+steps: ["local confirm", "operator confirm", "checklist: tools safe, fields clear, stability, crown brake -> retract",
+        "stand up", "resume from the last completed tree, never mid-cut"]
+interlocks: [no_motion_without_both_confirmations]
+outputs: [estop_record]
+kpis: [gated_100pct]
+retry: {}
+gates:
+  - {kind: dwell, ext_m: 0.0, dwell_s: 20.0}
+estimate:
+  fixed_s: "2 * confirm_s + stand_s + 8.5"                 # crown retract from the braked height <= 8.5 s
+console: {tile: "E-STOP RECOVERY", icon: estop, hi: "आपात रोक से वापसी", en: "E-stop recovery", order: 33, group: recovery,
+          show: []}

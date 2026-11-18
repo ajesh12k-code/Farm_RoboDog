@@ -4,9 +4,9 @@ import mujoco
 import numpy as np
 import pytest
 
-from controllers.farm_scene import load_farm_model
-from controllers.locomotion_logic import GaitParams, quat_to_roll_pitch, quat_to_yaw
-from controllers.tripod_gait import (
+from atharv_nandi.core.farm_scene import load_farm_model
+from atharv_nandi.core.locomotion_logic import GaitParams, quat_to_roll_pitch, quat_to_yaw
+from atharv_nandi.core.tripod_gait import (
     FOOT_Y, HIP_X, HOME_CALF, LATERAL_ARM, LEG_NAMES, LEG_REACH, MAX_BALANCE_EXT, SIDE, TWO_PI, TripodGaitGenerator,
     balance_corrections, balance_extensions, home_leg_targets, leg_extension_to_joints, leg_strides,
 )
@@ -203,7 +203,13 @@ def test_hold_release_finishes_current_cycle_and_stop_is_immediate():
     assert g.is_active and not g.is_held
     assert g.remaining_phase == pytest.approx(TWO_PI - phase)
     g.stop()
-    assert not g.is_walking and g.step() == pytest.approx(home_leg_targets())
+    assert not g.is_walking
+    # stop() targets home at once; the 5 rad/s rate limit (0.10 rad per tick) slews the legs there.
+    out = g.step()
+    assert max(abs(a - b) for a, b in zip(out, home_leg_targets())) < 0.5
+    for _ in range(10):
+        out = g.step()
+    assert out == pytest.approx(home_leg_targets())
 
 
 def test_freq_sets_phase_rate():
@@ -215,11 +221,12 @@ def test_freq_sets_phase_rate():
 
 def test_step_height_scales_lift():
     def calf_drop(scale):
-        g = _gait(step_height_scale=scale)
+        # 0.8 Hz keeps the doubled lift (0.84 rad) under the 5 rad/s target rate limit (peak 4.2 rad/s)
+        g = _gait(step_height_scale=scale, freq_hz=0.8)
         g.set_command(1.0, 0.0, 0.0, hold=True)
         for _ in range(20):
             g.step()
-        outs = [g.step() for _ in range(30)]  # > one cycle at 1.8 Hz
+        outs = [g.step() for _ in range(70)]  # > one cycle at 0.8 Hz
         return min(out[3 * i + 2] for out in outs for i in range(6)) - HOME_CALF
     assert calf_drop(2.0) == pytest.approx(2.0 * calf_drop(1.0))
     assert calf_drop(1.0) < -0.3
@@ -306,3 +313,18 @@ def test_closed_loop_stand_still_stays_put(monkeypatch):
     res = _closed_loop(monkeypatch, 0.0, 0.0, 0.0, seconds=2.0)
     _assert_upright(res)
     assert abs(res["vx_mps"]) < 0.02 and abs(res["vy_mps"]) < 0.02, res
+
+
+def test_targets_are_rate_limited_to_the_motor_speed_cap():
+    """AK80-64 class legs: every target moves at most MAX_JOINT_SPEED_RPS * dt per tick (0.10 rad at 50 Hz)."""
+    from atharv_nandi.core.tripod_gait import MAX_JOINT_SPEED_RPS
+    g = TripodGaitGenerator(0.02, GaitParams(step_height_scale=2.0, freq_hz=3.0))
+    g.set_command(1.0, 1.0, 1.0, hold=True)
+    prev = g.step()
+    peak = 0.0
+    for _ in range(200):
+        out = g.step(0.2, -0.2)
+        peak = max(peak, max(abs(a - b) for a, b in zip(out, prev)))
+        prev = out
+    assert MAX_JOINT_SPEED_RPS == 5.0
+    assert peak == pytest.approx(MAX_JOINT_SPEED_RPS * 0.02)  # the cap binds and is never exceeded

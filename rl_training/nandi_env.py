@@ -24,7 +24,7 @@ class NandiLocomotionEnv(gym.Env):
         model_path = os.path.abspath(
             os.path.join(
                 os.path.dirname(__file__),
-                "../sim/models/AtharvNandi/atharv_nandi.xml",
+                "../atharv_nandi/sim/models/AtharvNandi/atharv_nandi.xml",
             )
         )
         # Load the static physics model from XML

@@ -1,0 +1,117 @@
+# WP40 synthetic dataset generator (CAMERA-TRAINING C.2, C.3). Owner: WP40.
+# Every byte of this file (and of config/synth_classes.yaml) goes into the dataset id: change a knob and
+# the id changes. Lane 0 (capped runner, CI runner, CPU llvmpipe) only.
+version: 1
+
+dataset:
+  seed: 7
+  width: 320
+  height: 240
+  images: 60
+  images_per_scene: 6
+  # `shadows` is an explicit field that changes the dataset id. On llvmpipe shadows add 130-250 ms per pass
+  # (measured, probe), so lane 0 uses off.
+  shadows: off
+  # Minimum visible-mask pixels for a box: 12 at 320 wide, scaled linearly with width (24 at 640).
+  min_visible_px_at_320: 12
+  png_compress_level: 1
+  # MSAA samples of the offscreen buffer (RGB only; the seg pass is exact either way, tested).
+  msaa_samples: 4
+  # Scene source: `stub` (WP40's own stub modules, built through the WP0 compose interface) or `compose`
+  # (registered sim/world/modules selected by name; for when WP4/WP23/WP26/WP37/WP39 have merged).
+  source: stub
+  compose_modules: []
+  compose_world: synth_compose
+  # Only `simulated` is accepted. Real frames never enter lane 0 (C.7, OQ-48).
+  data_provenance: simulated
+
+# Scene composition (stub scenes). Ranges are uniform unless noted.
+scene:
+  trees: [1, 2]
+  tree_spacing_m: 5.0
+  fruit_per_tree: [6, 16]
+  decals_per_tree: [3, 8]
+  canopy_blobs: [4, 9]          # foliage density
+  p_dock: 0.5
+  p_person: 0.6
+  p_animal: 0.5
+  p_fallen_wire: 0.3
+  p_distractors: 0.7
+  seasons: [fruiting, flowering, monsoon, winter]
+
+species:
+  mango:  {shape: ellipsoid, size_m: [0.045, 0.06], aspect: [1.3, 1.6], stages: [green, breaker, ripe, overripe]}
+  guava:  {shape: sphere,    size_m: [0.03, 0.045], aspect: [1.0, 1.1], stages: [green, breaker, ripe]}
+  papaya: {shape: ellipsoid, size_m: [0.06, 0.08],  aspect: [1.6, 2.0], stages: [green, breaker, ripe]}
+  banana: {shape: bunch,     size_m: [0.018, 0.022], aspect: [5.0, 6.0], stages: [green, ripe]}
+
+# Broad hue per stage, so the model learns shape, not colour (mango maturity uses shoulder and stem-end
+# cues). HSV hue in degrees, saturation, value.
+stage_colour:
+  green:    {hue: [70, 130], sat: [0.45, 0.85], val: [0.35, 0.75]}
+  breaker:  {hue: [45, 95],  sat: [0.45, 0.85], val: [0.45, 0.85]}
+  ripe:     {hue: [20, 60],  sat: [0.55, 0.95], val: [0.55, 0.95]}
+  overripe: {hue: [5, 40],   sat: [0.45, 0.85], val: [0.30, 0.65]}
+
+# Procedural texture banks (stand-ins for the CC0 ambientCG / Poly Haven banks; those are licence-checked
+# per asset at adoption and are not in the repo). Hue ranges in degrees.
+banks:
+  bank_a: {bark_hue: [20, 35],  leaf_hue: [85, 120],  soil_hue: [25, 40], sky: [[0.45, 0.65, 0.95], [0.95, 0.95, 1.0]], builtin: checker}
+  bank_b: {bark_hue: [10, 25],  leaf_hue: [70, 100],  soil_hue: [15, 30], sky: [[0.60, 0.70, 0.85], [0.90, 0.88, 0.80]], builtin: gradient}
+  bank_c: {bark_hue: [30, 50],  leaf_hue: [110, 150], soil_hue: [35, 55], sky: [[0.75, 0.75, 0.78], [0.55, 0.58, 0.62]], builtin: flat}
+
+splits:
+  # Scene fractions; every split with a positive fraction gets at least one scene.
+  fractions: {train: 0.6, val: 0.1, test_seed: 0.1, test_bank: 0.1, test_species: 0.1}
+  train_species: [mango, papaya, banana]
+  heldout_species: [guava]
+  train_banks: [bank_a, bank_b]
+  heldout_banks: [bank_c]
+
+# Camera rigs (SENSOR-SUITE, ORCHARD-MVP-SPEC 2.5) at WP25/WP26 station poses with jitter, plus the dock
+# approach poses of RTH-DOCKING E.6. fovy is vertical (MuJoCo free camera). weight = sampling weight.
+cameras:
+  ring:  {weight: 3, height_m: [0.98, 0.98], standoff_m: [1.6, 2.6], target_z_m: [0.9, 1.8], fovy_deg: [78, 86]}
+  crown: {weight: 3, heights_m: [1.10, 1.70, 2.70], standoff_m: [1.8, 2.4], target_z_m: [1.4, 2.4], fovy_deg: [40, 55]}
+  wrist: {weight: 2, standoff_m: [0.25, 0.6], fovy_deg: [55, 65]}
+  head:  {weight: 2, height_m: [0.50, 0.62], standoff_m: [1.0, 2.0], target_z_m: [0.0, 0.5], fovy_deg: [55, 65]}
+  belly: {weight: 1, height_m: [0.27, 0.31], fovy_deg: [88, 92]}
+  rear:  {weight: 1, height_m: [0.40, 0.50], standoff_m: [1.5, 3.0], target_z_m: [0.0, 0.4], fovy_deg: [60, 70]}
+  dock:  {weight: 2, staging_m: 1.0, pre_entry_m: 0.30, fovy_deg: [55, 65]}
+  pose_jitter_m: 0.05
+  yaw_jitter_deg: 4.0
+
+# Domain randomisation. Each knob: dist (uniform | normal | choice | bernoulli), range or values (or p),
+# stage (curriculum: a knob is active when stage <= curriculum_stage, else it takes `default`), default.
+curriculum_stage: 2
+dr:
+  sun_elevation_deg:   {dist: uniform, range: [12, 80], stage: 0, default: 55}
+  sun_azimuth_deg:     {dist: uniform, range: [0, 360], stage: 0, default: 135}
+  sun_intensity:       {dist: uniform, range: [0.45, 1.0], stage: 0, default: 0.8}
+  colour_temp_k:       {dist: uniform, range: [3200, 7500], stage: 1, default: 5800}
+  ambient:             {dist: uniform, range: [0.15, 0.45], stage: 0, default: 0.3}
+  weather:             {dist: choice, values: [clear, haze, fog, dust, winter_fog], weights: [0.5, 0.15, 0.12, 0.13, 0.1], stage: 1, default: clear}
+  fovy_jitter_deg:     {dist: uniform, range: [-2.0, 2.0], stage: 1, default: 0.0}
+  distortion_k1:       {dist: uniform, range: [-0.06, 0.06], stage: 2, default: 0.0}
+  distortion_k2:       {dist: uniform, range: [-0.01, 0.01], stage: 2, default: 0.0}
+  exposure:            {dist: uniform, range: [0.7, 1.35], stage: 0, default: 1.0}
+  white_balance:       {dist: uniform, range: [0.88, 1.12], stage: 1, default: 1.0}
+  sensor_noise_sigma:  {dist: uniform, range: [0.0, 6.0], stage: 0, default: 0.0}
+  defocus_px:          {dist: choice, values: [0, 0, 1, 2], stage: 1, default: 0}
+  motion_blur_px:      {dist: choice, values: [0, 0, 2, 4], stage: 1, default: 0}
+  jpeg_quality:        {dist: choice, values: [100, 90, 75, 60], stage: 1, default: 100}
+  rain_streaks:        {dist: bernoulli, p: 0.15, stage: 2, default: false}
+  lens_drops:          {dist: bernoulli, p: 0.1, stage: 2, default: false}
+  belly_lens_dirt:     {dist: uniform, range: [0.0, 0.5], stage: 1, default: 0.0}
+  dock_tag_cover:      {dist: choice, values: [clear, clear, dust, leaves], stage: 1, default: clear}
+  dock_tag_glare:      {dist: bernoulli, p: 0.2, stage: 2, default: false}
+  decal_size_m:        {dist: uniform, range: [0.010, 0.045], stage: 0, default: 0.02}
+  decal_opacity:       {dist: uniform, range: [0.6, 1.0], stage: 1, default: 1.0}
+
+# Sim calibration targets (C.2 side-task): a marker board per camera rig with ground-truth intrinsics and
+# extrinsics. calib_check.py must recover the intrinsics within tolerance.
+calibration:
+  rigs: [ring, crown, wrist, head, belly, rear]
+  views: 6
+  board: {cols: 9, rows: 7, pitch_m: 0.06, marker_m: 0.03}
+  tolerance: 0.01

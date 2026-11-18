@@ -1,0 +1,50 @@
+# SCAN: row or orchard survey, one health record per tree (MISSION-PRESETS 1). Numbers: (assumption) unless marked.
+schema: nandi.preset/1
+id: scan
+mode: scan_rows
+version: 1
+kind: survey
+title: "SCAN: row / orchard survey"
+season: scan
+crops: [mango, guava, papaya, banana]
+targets: [row_ids, block_id, block_sample, tree_ids]
+crown: optional            # crown mid where the gate table allows, else stowed with chip crown_gate: <reason>
+weather: non_contact
+slope_limit_deg: 5.0       # stowed walking <= 5 deg (OS 5.2); crown-up walking only <= 2 deg (gate below)
+params:
+  sides: {default: both, enum: [both, L, R]}
+  crown_band: {default: mid, enum: [mid, stowed]}
+  crown_ext_m: {default: 0.6, min: 0.0, max: 0.6}        # mid band: lens 1.70 m (OS 2.3)
+  v_mps: {default: 0.15, min: 0.05, max: 0.15}           # crown up <= 0.15 m/s (OS 1.2, MP 0.3)
+  v_stowed_mps: {default: 0.18, min: 0.05, max: 0.18}    # stowed <= 0.18 m/s (speed_scale 0.5, measured, probe)
+  burst_s: {default: 3.0, min: 1.0, max: 10.0}           # stop 3 s abeam (1 s settle + ring low + crown mid)
+  triage_threshold: {default: 0.5, min: 0.0, max: 1.0}
+  min_light_lux: {default: 2000, min: 200, max: 20000}   # camera preset light threshold (assumption)
+preconditions: [ready_common, registry_present, slope_walk, light, crown_walk_or_stowed, alley_clearance]
+steps:
+  - "Plan a boustrophedon alley route from the registry (alley centre, offset away from drip_line_offset_m)"
+  - "If the gates allow: raise to mid at the row start (standing); else run stowed with chip crown_gate: <reason>"
+  - "Walk the alley centre under the RTK + odometry path fence; stow before any segment that fails the gate"
+  - "Abeam each tree: stop, settle, burst, LiDAR profile (height, width, gaps, lean)"
+  - "Update the TreeRecord (bands, trunk band from the ring low frame, symptom leads per unit)"
+  - "Score triage, set flags {tree360, trunk_scan, leaf_scan, fruit_scout, harvest_window, prune}"
+  - "Stow at the row end"
+  - "Next row or home"
+interlocks: [common, arm_park, no_tool_engaged, crown_walk_cap, lateral_counter]
+outputs: [tree_record, block_summary, flag_list, keyframes, tele_tree]
+kpis: [registry_seen_95, bands_2_per_side, laterals_0, triage_pr, trees_per_h, wh_per_100m]
+retry: {registry_mismatch_m: 0.5, rtk_pause_s: 30, then: last_fixed_waypoint}
+gates:
+  - {kind: raise, ext_m: 0.0, to_m: $crown_ext_m, slope_deg: 2.0}
+  - {kind: walk, ext_m: $crown_ext_m, v_mps: $v_mps, slope_deg: 2.0}    # crown-up walking: <= 2 deg (OS 2.3 / WP6)
+  - {kind: dwell, ext_m: $crown_ext_m, dwell_s: $burst_s, slope_deg: 2.0}
+  - {kind: walk, ext_m: 0.0, v_mps: $v_stowed_mps}                       # stowed: at the preset slope limit
+estimate:
+  fixed_s: "2 * crown_ext_m / 0.2"         # raise + stow at 0.2 m/s
+  per_tree_s: $burst_s
+  walk_m: route_m
+  v_mps: $v_mps
+  crown_m: "2 * crown_ext_m"
+  disk_mb_per_tree: 2.0                    # assumption: burst stills + LiDAR profile
+console: {tile: SCAN, icon: scan, hi: "सर्वे", en: "Scan rows", order: 1, show: [sides, crown_band],
+          advanced: [v_mps, burst_s, triage_threshold]}

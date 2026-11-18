@@ -1,0 +1,155 @@
+# Atharv Nandi orchard perception config (WP26): LEAF SCAN, TRUNK/BASE SCAN, pest / symptom leads, fruit tracking,
+# maturity and harvest window. Read by sim/controllers/perception/{leaf_scan,trunk_scan,pest_detect,fruit_track,
+# ripeness}.py (ROS-free). Spec: ORCHARD-MVP-SPEC 2.5, 4.4, 5.6; MISSION-PRESETS 3, 3b, 4; contract WP26.
+# Labels: every number here is (assumption) unless it says (spec) or (computed). Leads are leads: every symptom
+# output has stage `lead` (OS 5.6); next_actions are the enumerated, non-advisory list only.
+schema: nandi.perception_orchard/1
+
+cameras:
+  wrist: {width: 320, height: 240, fovy_deg: 60.0}    # OS 2.5: sim wrist 320 x 240, fovy 60 -> 0.72 mm/px at 0.15 m
+  crown: {width: 320, height: 240, fovy_deg: 60.0}
+  ring: {width: 320, height: 240, fovy_deg: 60.0}     # TREE 360 capture size (config/perception.yaml cameras.capture_*)
+
+# ---------------------------------------------------------------------------------------------- LEAF SCAN (MP 3)
+leaf_scan:
+  n_leaves: 12                # 4 azimuths x {young flush, mature} x {upper, under} (MP 3, assumption for the agronomist)
+  demo_n_leaves: 6            # demo 6 + 1 high
+  demo_high_n: 1
+  standoff_m: 0.15            # wrist approach to 0.15 m (MP 3 step 3); search range below
+  standoff_range_m: [0.12, 0.20]
+  frames_per_side: 3
+  min_clearance_m: 0.02       # MP 3: wrist-leaf clearance >= 2 cm (stop if violated)
+  backoff_m: 0.03             # depth < min-Z -> back off 3 cm
+  min_z_m: 0.10               # wrist camera min depth (D405 class ~7 cm; sim near plane 0.05)
+  view_cone_deg: 35.0         # underside view axis within 35 deg of the leaf normal (WP0c sweep)
+  view_cone_steps: 6
+  underside_min_up: 0.2       # underside view axis z >= 0.2 (must look up)
+  approach_m: 0.10            # straight-line approach along the view axis from a pre-pose this far back
+  approach_samples: 11
+  wrist_proxy: {r_m: 0.025, len_m: 0.10}    # camera head + wrist housing capsule behind the lens (assumption)
+  pick_band_z_m: 0.8          # OS 2.2: contact / close-up targets at z <= 0.8 m (spec)
+  max_footprint_mm_px: 1.0    # O-08: footprint <= 1.0 mm/px in the sim (spec)
+  min_decal_px: 12            # WP26 gl: a 12 mm decal spans >= 12 px on the wrist frame (spec)
+  crown_lens_m: 1.10          # flagged leaves above the band: crown at 1.10 m, tilt up to +45 deg, `not_close_up`
+  crown_tilt_max_deg: 45.0
+  # time model per leaf (O-08 median <= 10 s/leaf): arm move + settle + frames per side
+  transit_speed_m_s: 0.30     # free-space arm move between poses (assumption; MP 3 "arm speed cap")
+  approach_speed_m_s: 0.15    # last 10 cm straight approach along the view axis
+  settle_s: 0.5
+  frame_s: 0.2
+  side_switch_s: 1.5
+  blur_retry: 2               # MP 3 failure: blur -> retry 2 (then the side is logged `blurred`, not imaged)
+  backoff_max: 2              # depth < min-Z -> back off 3 cm, at most this many times (then `min_z`)
+  reapproach_max: 2           # base drift > 2 cm -> pause the arm, re-approach; at most this many times (then `base_drift`)
+  drift_max_m: 0.02           # MP 3 interlock: base drift > 2 cm pauses the arm (spec)
+  dwell_s: 60.0               # LEAF / TRUNK SCAN dwell for the WP6 dwell gate (<= 3 deg cross for dwells to 60 s)
+  led: "on"                   # MP 3 params: LED on
+  min_light_lux: 1000         # light threshold (assumption); `dawn_mode` (before 08:00) lowers it
+  dawn_min_light_lux: 200     # (assumption)
+  dawn_before_h: 8
+  blade_tools: [T2, T5]       # CLIPPER / PRUNER: blade must be locked open while a scan runs (MP 3 interlock)
+
+# ---------------------------------------------------------------------------------------- TRUNK/BASE SCAN (MP 3b)
+trunk_scan:
+  azimuths: 4                 # full; hedgerow: the 2 alley-side azimuths
+  heights_m: [0.2, 0.5, 0.8]  # wrist close-ups (MP 3b step 2), clamped to the trunk / pseudostem
+  standoff_m: 0.20            # wrist camera at 0.15-0.25 m from the bark
+  standoff_range_m: [0.15, 0.25]
+  ring_low: {lens_z_m: 0.98, standoff_m: 0.9}   # ring low frame from the orbit stand-off (OS 2.3)
+  view_half_angle_deg: 70.0   # a bark decal is imaged when its normal is within this of the view ray (45 deg between
+                              # azimuths on a 0.118 m pseudostem at 0.20 m gives 64.5 deg, computed)
+  portrait: true              # wrist rolled 90 deg on the bark: 240 x 320, vertical half-cover 0.154 m at 0.20 m (computed),
+                              # so the 0.2 / 0.5 / 0.8 m close-ups tile the 0-1.0 m base band without gaps
+  min_clearance_m: 0.02
+  frames_per_view: 2
+  time_per_view_s: 3.0        # arm move + settle + frames (assumption)
+  ring_frame_s: 1.0
+  hedgerow_forms: [hedgerow]
+
+# ------------------------------------------------------------------------------- symptom classes (OS 3.3, 4.4)
+# The WP23 crop profiles carry {class, unit, bands, seasons, scale}; this catalogue adds the perception side:
+# the decal colour signature the ColorBlob baseline uses, the TreeRecord trunk{} key, and the minimum size.
+# Classes not in a crop profile (shoot_gall) are declared here and detected when a decal of that class exists.
+classes:
+  sooty_mould:       {crops: [mango], unit: per_shoot, scale: canopy, rgb: [0.08, 0.08, 0.08]}
+  powdery_mildew:    {crops: [mango], unit: per_panicle, scale: canopy, rgb: [0.30, 0.22, 0.10]}
+  anthracnose:       {crops: [mango], unit: per_leaf, scale: leaf, rgb: [0.20, 0.12, 0.06]}
+  malformation:      {crops: [mango], unit: per_panicle, scale: canopy, rgb: [0.30, 0.22, 0.10]}
+  webber:            {crops: [mango], unit: per_shoot, scale: canopy, rgb: [0.30, 0.22, 0.10]}
+  mealybug:          {crops: [mango, guava], unit: trunk, scale: trunk, rgb: [0.95, 0.95, 0.92], trunk_key: mealybug}
+  shoot_gall:        {crops: [mango], unit: per_shoot, scale: canopy, rgb: [0.30, 0.22, 0.10], seasons: [post_harvest, mature]}
+  stem_borer_frass:  {crops: [mango], unit: trunk, scale: trunk, rgb: [0.30, 0.22, 0.10], trunk_key: frass}
+  gummosis:          {crops: [mango], unit: trunk, scale: trunk, rgb: [0.55, 0.30, 0.05], trunk_key: gum}
+  hopper_honeydew:   {crops: [mango], unit: per_panicle, scale: canopy, rgb: [0.30, 0.22, 0.10], distance_only: true}
+  wilt:              {crops: [guava], unit: trunk, scale: trunk, rgb: [0.30, 0.22, 0.10], trunk_key: wilt}
+  fruit_fly:         {crops: [guava], unit: per_shoot, scale: canopy, rgb: [0.30, 0.22, 0.10]}
+  bark_caterpillar_webbing: {crops: [guava], unit: trunk, scale: trunk, rgb: [0.30, 0.22, 0.10], trunk_key: frass}
+  canker:            {crops: [guava], unit: per_leaf, scale: leaf, rgb: [0.30, 0.22, 0.10]}
+  prsv:              {crops: [papaya], unit: per_leaf, scale: canopy, rgb: [0.30, 0.22, 0.10]}
+  leaf_curl:         {crops: [papaya], unit: per_leaf, scale: canopy, rgb: [0.30, 0.22, 0.10]}
+  collar_rot:        {crops: [papaya], unit: trunk, scale: trunk, rgb: [0.30, 0.22, 0.10], trunk_key: collar_rot}
+  papaya_mealybug:   {crops: [papaya], unit: trunk, scale: trunk, rgb: [0.30, 0.22, 0.10], trunk_key: mealybug}
+  sigatoka:          {crops: [banana], unit: per_leaf, scale: canopy, rgb: [0.45, 0.35, 0.10], graded: true}
+  bunchy_top:        {crops: [banana], unit: per_leaf, scale: canopy, rgb: [0.30, 0.22, 0.10]}
+  weevil_gum:        {crops: [banana], unit: trunk, scale: trunk, rgb: [0.60, 0.40, 0.10], trunk_key: weevil_holes}
+
+# SimTruth lead detector (assisted, labelled): a decal is a candidate when it is in the frustum, faces the camera,
+# is not behind its own leaf, and spans >= min_px; then it is reported with p_detect, classed correctly with
+# 1 - p_confuse, plus Poisson false positives per frame. Seeded; scores are confidences, not probabilities of disease.
+simtruth:
+  seed: 26
+  p_detect: 0.97
+  p_confuse: 0.02
+  fp_per_frame: 0.02
+  min_px: 6.0                 # equivalent decal diameter on the frame
+  max_view_angle_deg: 75.0    # decal normal vs view ray
+  score: [0.6, 0.95]
+  fp_score: [0.2, 0.5]
+  score_threshold: 0.3
+
+colorblob:
+  max_rgb_dist: 0.12          # pixel within this RGB distance of a class signature -> that class
+  min_area_px: 6
+  render_lit: true            # the signature is matched on the lit render, so the distance is generous
+
+# Per-unit aggregation and block sampling (OS 5.6). N trees stratified by direction (N/E/S/W of the block
+# centroid), N from the crop (assumption, for KVK review).
+aggregation:
+  block_sample_n: {mango: 8, guava: 8, papaya: 6, banana: 6, default: 6}
+  strata: [N, E, S, W]
+  triage_threshold: 0.5       # MP 1: tree flagged when its max lead score >= this
+  hopper_ipm_per_panicle: 4.0 # IPM threshold > 4-5 hoppers per panicle at early panicle (NIPHM / pestnet; cited in MP 3)
+
+# ------------------------------------------------------------------------------------------ FRUIT SCOUT (MP 4)
+fruit_track:
+  dedupe_radius_m: 0.04       # MP 4 default
+  merge_radius_m: 0.04        # tracks whose means end closer than this are merged at the end of a tree
+  min_hits: 2                 # a track counts once it was seen in >= 2 frames ...
+  single_hit_conf_min: 0.6    # ... or in one frame with detector confidence >= this (a fruit at the canopy edge is
+                              # often >= 10 px in only one station frame; false positives score 0.2-0.5)
+  n_views: 8                  # 8 TREE 360 stations
+  seed: 26
+  # SimTruth fruit detector per view (assisted, labelled)
+  p_detect: 0.92
+  max_range_m: 2.6
+  min_px: 10.0
+  facing_cos_min: -0.15       # fruit centre normal (from the trunk axis) vs the view direction
+  occlusion_p: 0.12           # canopy self-occlusion of an otherwise facing fruit
+  lateral_sigma_px: 1.0       # bbox centre noise
+  depth_sigma_m: [0.004, 0.006]   # base + per metre of range (depth camera / LiDAR range x bbox)
+  fp_per_view: 0.15
+  size_sigma_mm_low: 2.0      # low band: size from depth (MP 4 step 5)
+  size_sigma_mm_coarse: 8.0   # mid / high: LiDAR range x bbox, flagged coarse
+  size_hist_edges_mm: [0, 60, 70, 80, 90, 100, 120, 160, 200, 260]
+  frames_max_age_h: 24        # MP 4 precondition: frames <= 24 h old
+
+ripeness:
+  # Mango (OS 4.4): shoulder rise over the stem end + stem-end colour + days since fruit set. No skin colour.
+  mango:
+    shoulder_sigma_mm: 0.35
+    stem_colour_flip_p: 0.05
+    weights: {shoulder_rise: 0.5, stem_end_colour: 0.3, days_since_fruit_set: 0.2}
+  guava: {hue_sigma: 0.04}     # observed skin colour score in [0, 1]: 0 dark green .. 1 light green / yellow
+  papaya: {streak_miss_p: 0.10}
+  banana: {angularity_flip_p: 0.10}
+  colorblob_stage: {chroma_sigma: 0.02}    # ColorBlob stage baseline: nearest stage rgba (reported, never gated)

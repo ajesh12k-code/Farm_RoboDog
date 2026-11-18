@@ -1,0 +1,33 @@
+# RECOVERY: RETURN HOME (MISSION-PRESETS 8): finish/abandon the item safely -> crown stow -> walk the last safe route;
+# RTK FIXED or FLOAT; on odometry only, row-following against registry trunks at 0.1 m/s.
+schema: nandi.preset/1
+id: return_home
+mode: return_home
+version: 1
+kind: recovery
+title: "RETURN HOME"
+season: recovery
+crops: [mango, guava, papaya, banana]
+targets: [none]
+crown: none
+weather: exempt
+slope_limit_deg: 5.0
+float_ok: true
+ready: {relax: [energy, rtk, season, weather, disk, novnc, cloud_link]}
+params:
+  v_mps: {default: 0.18, min: 0.05, max: 0.18}
+  v_odometry_mps: {default: 0.1, min: 0.05, max: 0.1}
+preconditions: [ready_common]
+steps: ["finish or abandon the current item safely", "crown stow", "walk the last safe route home",
+        "on odometry: row-following against registry trunks at 0.1 m/s"]
+interlocks: [geofence, fields]
+outputs: [arrival]
+kpis: [arrive_05m]
+retry: {}
+gates:
+  - {kind: walk, ext_m: 0.0, v_mps: $v_mps}
+estimate:
+  fixed_s: 8.5
+  walk_m: route_m
+  v_mps: $v_mps
+console: {tile: "RETURN HOME", icon: home, hi: "घर लौटो", en: "Return home", order: 31, group: recovery, show: []}

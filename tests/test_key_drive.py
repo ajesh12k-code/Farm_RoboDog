@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from controllers.key_drive import (
+from atharv_nandi.core.key_drive import (
     DEBOUNCE_S, GAIT_DEFAULTS, GAIT_PARAMS, PAD_PREFIX, RELEASE, REPUBLISH_S, DriveCommand, KeyDrive,
     action_for_key, clamp_gait_params, combine_keys, drive_axis, normalize_key,
 )

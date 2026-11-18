@@ -1,0 +1,62 @@
+# Recovery demo (ORCHARD-MVP-SPEC 1.1 "Separate mission recovery_demo", MISSION-PRESETS 10; not in the tour gate):
+# STUCK on the flat mud patch, SINK on the soft-soil patch, LOCAL LINK LOSS (stop, sit, hold), CLOUD LINK LOSS
+# (alley-edge park, hold), RETURN HOME on low SoC with RTK FLOAT. ~ 4 min sim (assumption). Same segment rules as
+# orchard_tour.yaml (tests/test_tour_gates.py checks both). Positions: orchard_demo metres (fictitious frame).
+schema: nandi.mission/1
+id: recovery_demo
+classification: Public
+world: orchard_demo
+season: demo_all_fruiting
+budget_s: 240            # ~ 4 min (assumption, OS 1.1)
+ctx:
+  season_profile: demo_all_fruiting
+  month: 11
+known_issues: []
+steps:
+  - id: r00_ready
+    title: "Ready check"
+    t_s: 5
+    budget_s: 5
+
+  - id: r01_stuck_mud
+    title: "STUCK on the mud patch (-3, -2): stop, back up 0.2 m, step height x1.5, alternative heading, assist"
+    preset: stuck_recover
+    ctx: {ext_m: 0.0}
+    budget_s: 60
+    motion:
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 1.0, path: [[0.0, 0.0], [-1.5, -2.0], [-3.0, -2.0]]}
+      - {kind: walk, ext_m: 0.0, v_mps: 0.1, slope_deg: 1.0, path: [[-3.0, -2.0], [-2.8, -2.0]]}     # back up 0.2 m
+
+  - id: r02_sink
+    title: "SINK on the soft-soil patch (-5, -2): same ladder, foot sink depth trigger"
+    preset: stuck_recover
+    ctx: {ext_m: 0.0, robot_xy: [-2.8, -2.0]}
+    budget_s: 60
+    motion:
+      - {kind: walk, transit: true, ext_m: 0.0, v_mps: 0.18, slope_deg: 1.0, path: [[-2.8, -2.0], [-3.9, -2.0], [-5.0, -2.0]]}
+      - {kind: walk, ext_m: 0.0, v_mps: 0.1, slope_deg: 1.0, path: [[-5.0, -2.0], [-4.8, -2.0]]}
+
+  - id: r03_local_link_loss
+    title: "LOCAL SAFETY LINK LOSS (> 0.5 s): stop, tools safe, crown retract, sit in place, hold; Resume / Halt"
+    preset: safe_park
+    ctx: {local_link: lost, robot_xy: [-4.8, -2.0]}
+    budget_s: 20
+    motion:
+      - {kind: dwell, ext_m: 0.0, dwell_s: 10.0, at: [-4.8, -2.0], slope_deg: 1.0}
+
+  - id: r04_cloud_link_loss
+    title: "CLOUD LINK LOSS (local up, > 5 s): finish the item safely, SAFE PARK <= 3 m to the headland edge, hold"
+    preset: safe_park
+    ctx: {cloud_link: lost, robot_xy: [-4.8, -2.0]}
+    budget_s: 30
+    motion:
+      - {kind: walk, ext_m: 0.0, v_mps: 0.18, slope_deg: 1.0, path: [[-4.8, -2.0], [-4.8, -0.2]]}
+      - {kind: dwell, ext_m: 0.0, dwell_s: 10.0, at: [-4.8, -0.2], slope_deg: 1.0}
+
+  - id: r05_return_home_float
+    title: "RETURN HOME on low SoC (projected < reserve) with RTK FLOAT"
+    preset: return_home
+    ctx: {rtk: FLOAT, soc: 0.22, robot_xy: [-4.8, -0.2]}
+    budget_s: 60
+    motion:
+      - {kind: walk, ext_m: 0.0, v_mps: 0.18, slope_deg: 1.0, path: [[-4.8, -0.2], [-2.0, 0.6], [0.0, 0.0]]}

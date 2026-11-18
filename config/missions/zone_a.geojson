@@ -1,0 +1,40 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "name": "zone_a",
+    "description": "Sim zone A: the north crop row (y ~ +0.45) of the default NANDI_CROPS=6 field, x 0.40..3.90 m, y 0.15..1.20 m in the site frame. Fictitious coordinates (site_sim.yaml).",
+    "crs": "EPSG:4326"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -29.99999632,
+       12.500001356
+      ],
+      [
+       -29.999964121,
+       12.500001356
+      ],
+      [
+       -29.999964121,
+       12.500010847
+      ],
+      [
+       -29.99999632,
+       12.500010847
+      ],
+      [
+       -29.99999632,
+       12.500001356
+      ]
+     ]
+    ]
+   }
+  }
+ ]
+}

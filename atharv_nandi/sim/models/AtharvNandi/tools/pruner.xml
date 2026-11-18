@@ -1,0 +1,45 @@
+<!-- Atharv Nandi T5 PRUNER (WP2; ORCHARD-MVP-SPEC 2.4, 3.4 "Prune and tidy"): bypass pruner with a hook blade,
+     capacity <= 12 mm green wood (ASSUMED, spec). Free body (6 dof) + pruner_roll hinge (+-90 deg) + pruner_blade
+     hinge = 8 dof. Tool frame as the clipper: origin = pruner_handle_ref on tool_flange, +x = tool axis, TCP 0.12
+     ahead (0.21 m from the wrist pivot, WP0c frozen). Pivot 0.03 m behind the TCP (lever 0.03, ASSUMED).
+     pruner_blade q = closing angle 0 (open, 0.6 rad) .. 0.6 (closed); actuator ctrl 0..1 (gear 1/0.6),
+     forcerange 14.4 x gear = 24 N.m -> 800 N at the hook (ASSUMED geared drive + compound lever; a 12 mm green
+     shoot needs ~565 N at 5 N/mm2, registry.PRUNE_SHEAR_N_PER_MM2). Prune targets are contype 0 in the tree
+     model (WP23), so the jaws never push them; the cut is logical (hide the target, spawn a debris body). Sensor
+     pruner_blade_pos (blade jointpos, OS 2.4). -->
+<mujoco model="nandi_tool_pruner">
+  <compiler angle="radian" autolimits="true"/>
+  <worldbody>
+    <body name="pruner">
+      <freejoint name="pruner_free"/>
+      <geom name="pruner_handle" type="box" pos="0.035 0 0" size="0.035 0.010 0.012" mass="0.10"
+            contype="16" conaffinity="0" group="2" rgba="0.15 0.15 0.18 1"/>
+      <site name="pruner_handle_ref" pos="0 0 0" size="0.004" group="5" rgba="0 1 1 0.5"/>
+      <body name="pruner_head" pos="0.07 0 0">
+        <joint name="pruner_roll" type="hinge" axis="1 0 0" range="-1.5708 1.5708" damping="0.05" armature="0.002"/>
+        <geom name="pruner_frame" type="box" pos="0.008 0 0" size="0.008 0.02 0.014" mass="0.12"
+              contype="16" conaffinity="0" group="2" rgba="0.75 0.15 0.12 1"/>
+        <geom name="pruner_hook" type="box" pos="0.042 0.005 0" size="0.026 0.005 0.002" mass="0.03"
+              contype="0" conaffinity="0" group="2" rgba="0.55 0.57 0.6 1"/>
+        <geom name="pruner_hook_tip" type="capsule" fromto="0.066 0.008 0  0.072 -0.004 0" size="0.003" mass="0.01"
+              contype="0" conaffinity="0" group="2" rgba="0.55 0.57 0.6 1"/>
+        <site name="pruner_tcp" pos="0.05 0 0" size="0.003" group="5" rgba="1 0 0 0.6"/>
+        <site name="pruner_blade_a" pos="0.05 0 0" size="0.002" group="5" rgba="1 1 0 0.6"/>
+        <body name="pruner_blade" pos="0.02 0 0.004" quat="0.955336 0 0 -0.295520">
+          <joint name="pruner_blade" type="hinge" axis="0 0 1" range="0 0.62" damping="0.1" armature="0.01"/>
+          <geom name="pruner_blade_moving" type="box" pos="0.03 -0.005 0" size="0.03 0.005 0.0015" mass="0.04"
+                contype="0" conaffinity="0" group="2" rgba="0.8 0.82 0.85 1"/>
+          <site name="pruner_blade_b" pos="0.03 0 0" size="0.002" group="5" rgba="1 0.5 0 0.6"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="pruner_roll" joint="pruner_roll" kp="8" kv="0.3" ctrlrange="-1.5708 1.5708" forcerange="-2 2"/>
+    <position name="pruner_blade" joint="pruner_blade" gear="1.6666667" kp="102" kv="0.6" ctrlrange="0 1"
+              forcerange="-14.4 14.4"/>
+  </actuator>
+  <sensor>
+    <jointpos name="pruner_blade_pos" joint="pruner_blade"/>
+  </sensor>
+</mujoco>

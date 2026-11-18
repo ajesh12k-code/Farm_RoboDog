@@ -5,7 +5,7 @@ import mujoco
 import numpy as np
 import pytest
 
-from controllers.farm_scene import (
+from atharv_nandi.core.farm_scene import (
     CROP_RADIUS,
     RIDGES,
     ROBOT_XML,

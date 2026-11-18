@@ -3,7 +3,7 @@ import math
 
 import pytest
 
-from controllers.telemetry import (
+from atharv_nandi.core.telemetry import (
     BAD_RED, OK_GREEN, WARN_AMBER, format_clock, format_game, format_harvest, format_mode,
     format_telemetry, parse_game_status, parse_harvest_status, parse_locomotion_status,
     parse_qpos_telemetry, shorten,

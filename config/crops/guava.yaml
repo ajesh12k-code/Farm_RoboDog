@@ -1,0 +1,52 @@
+# Atharv Nandi crop profile: guava. WP23, ORCHARD-MVP-SPEC 4.4. Schema nandi.crop_profile/1.
+# Project decision OQ-01 A: guava is the second pilot crop (harvest in the MVP).
+schema: nandi.crop_profile/1
+crop: guava
+cultivars: [Allahabad Safeda, Lalit, Shweta]
+default_cultivar: Allahabad Safeda
+mvp_scope: harvest
+priority: 2
+harvest_method: clip            # clipper with stalk and leaves preferred over pulling (cited, ITFNet)
+methods: [clip, twist]
+tool: T2
+pool_kind: weld                 # OS 3.4: slots 5-9
+one_round: false
+pull_release: false
+pedicel_leave_cm: {default: 1.0, min: 0.5, max: 2.0}   # (assumption) short stalk with a leaf pair
+tau_detach_nm: 0.15             # WP23 sweep: 2 N tangential brush peaks at 0.052 N.m; 2x margin -> 0.15 (OS 3.4 placeholder kept)
+twist_min_roll_deg: 30
+placement_speed_max_m_s: 1.0
+mass_kg: [0.136, 0.164]         # Allahabad Safeda 136-163 g, Lalit 164 g (cited)
+skin_colour_cue: true
+maturity_cues: [skin_colour]
+offrobot_checks: [tss]
+stages:
+  - id: immature
+    harvest: false
+    days_since_fruit_set: [0, 109]
+    cues: {skin: dark_green}
+    rgba: [0.18, 0.45, 0.15, 1.0]
+  - id: mature
+    harvest: true
+    days_since_fruit_set: [110, 150]   # (assumption)
+    cues: {skin: light_green_yellow}
+    rgba: [0.78, 0.86, 0.38, 1.0]
+harvest_window: {basis: skin_colour, days: [110, 135]}
+bagging: {used: false}
+calendar_up:
+  Allahabad Safeda: {harvest: ["11-01", "01-31"]}   # mrig bahar (cited, vikaspedia); ambe bahar Jul-Sep
+  Lalit: {harvest: ["11-01", "01-31"]}
+  Shweta: {harvest: ["11-01", "01-31"]}
+prune:
+  max_stem_mm: 12
+  paste_required_mm: 12
+  window_months: [5, 1, 2]      # May and January-February (MISSION-PRESETS 6)
+  jobs: [rootstock_sprout, skirt_lift, dead_twig, water_shoot]
+  skirt_below_m: 0.65
+min_functional_leaves: null
+symptoms:
+  - {class: wilt, unit: trunk, bands: [low], seasons: [all], scale: trunk}
+  - {class: fruit_fly, unit: per_shoot, bands: [low, mid], seasons: [mature], scale: canopy}
+  - {class: bark_caterpillar_webbing, unit: trunk, bands: [low, mid], seasons: [all], scale: trunk}
+  - {class: canker, unit: per_leaf, bands: [low, mid], seasons: [mature, fruit_set], scale: leaf}
+  - {class: mealybug, unit: per_leaf, bands: [low, mid], seasons: [all], scale: leaf}

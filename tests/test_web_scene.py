@@ -1,4 +1,4 @@
-"""ROS-free tests for the browser bridge's pure logic (sim/controllers/web_scene.py)."""
+"""ROS-free tests for the browser bridge's pure logic (atharv_nandi/core/web_scene.py)."""
 import json
 import math
 import os
@@ -7,10 +7,10 @@ import mujoco
 import numpy as np
 import pytest
 
-from controllers import web_scene as ws
-from controllers.farm_scene import crop_body_names, crop_qpos_slice, load_farm_model
+from atharv_nandi.core import web_scene as ws
+from atharv_nandi.core.farm_scene import crop_body_names, crop_qpos_slice, load_farm_model
 
-WEB_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "web"))
+WEB_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "atharv_nandi", "web"))
 
 
 @pytest.fixture(scope="module")
@@ -78,10 +78,17 @@ def test_capsule_from_fromto_uses_half_length_and_midpoint(model, scene):
     r, half, _ = caps[0]["size"]
     assert r == pytest.approx(0.026) and half == pytest.approx(0.115)
     assert caps[0]["pos"] == pytest.approx([0.0, 0.0, -0.115], abs=1e-6)
-    # local z of the capsule must point along -z of the body (fromto direction), i.e. a 180 deg flip
-    w, x, y, z = caps[0]["quat"]
-    zz = 1.0 - 2.0 * (x * x + y * y)  # R[2][2]
-    assert zz == pytest.approx(-1.0, abs=1e-5)
+    # The capsule's local z must lie along the fromto segment. Its SIGN is not part of the contract:
+    # MuJoCo points local z from the "to" end back to the "from" end (fromto 0 0 0 0 0 -0.23 compiles to
+    # the identity quat, fromto 0 0 0 0 0 +0.23 to a 180 deg flip), and a capsule is symmetric about its
+    # centre anyway. The scene streams model.geom_quat verbatim, so check the geometry it describes: the
+    # two segment ends pos +- half * z must be exactly the fromto points.
+    rot = np.zeros(9)
+    mujoco.mju_quat2Mat(rot, np.asarray(caps[0]["quat"], dtype=np.float64))
+    axis = rot.reshape(3, 3)[:, 2]
+    assert abs(axis[2]) == pytest.approx(1.0, abs=1e-5)
+    ends = sorted([np.asarray(caps[0]["pos"]) + s * half * axis for s in (1.0, -1.0)], key=lambda p: p[2])
+    assert ends[0] == pytest.approx([0.0, 0.0, -0.23], abs=1e-5) and ends[1] == pytest.approx([0.0, 0.0, 0.0], abs=1e-5)
     # FR hip: <geom type="cylinder" fromto="0 0 0 0 -0.065 0" size="0.035"/>
     cyl = [g for g in _geoms_of(scene, _body_id(model, "FR_hip")) if g["type"] == "cylinder"]
     assert len(cyl) == 1
@@ -370,3 +377,152 @@ def test_static_symlink_escape_rejected(web_root, tmp_path):
 def test_repo_web_client_is_servable():
     for name in ("index.html", "app.js", "scene3d.js", "controls.js", "net.js", "style.css"):
         assert ws.resolve_static_path(WEB_DIR, "/" + name) is not None, name
+
+
+# ================================================================ WP10: the orchard scene
+
+import contextlib  # noqa: E402
+
+from atharv_nandi.core import console_protocol as cp  # noqa: E402
+from atharv_nandi.core import farm_scene  # noqa: E402
+from atharv_nandi.core import sim_state  # noqa: E402
+from atharv_nandi.sim.world import compose  # noqa: E402
+
+
+@contextlib.contextmanager
+def _env(**kw):
+    old = {k: os.environ.get(k) for k in kw}
+    try:
+        os.environ.update({k: str(v) for k, v in kw.items()})
+        yield
+    finally:
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+@pytest.fixture(scope="module")
+def orchard():
+    with _env(NANDI_WORLD="orchard_demo"):
+        cfg = farm_scene.world_config()
+        w = compose.build(cfg["world"], cfg["seed"], farm_scene.ROBOT_XML, cfg)
+        m = w.spec.compile()
+        field = compose.load_field(cfg["world"], cfg["seed"])
+    return m, w, field, ws.build_scene(m)
+
+
+def _names(model, scene):
+    return {b["name"] for b in scene["bodies"]} | {b["name"] for b in scene["static_bodies"]}
+
+
+def test_orchard_scene_has_every_tree_and_module_body(orchard):
+    m, _, field, scene = orchard
+    names = _names(m, scene)
+    for t in field["trees"]:
+        assert f"tree_{t['tree_id']}" in names, t["tree_id"]
+    # every body of every composed module that carries a drawable geom: trees, dock, crate, mast sections, tools,
+    # fruit pool slots, actors, debris, legacy crops; the robot
+    for b in range(1, m.nbody):
+        has_drawable = any(int(m.geom_bodyid[g]) == b and int(m.geom_type[g]) in ws.GEOM_TYPES
+                           and int(m.geom_group[g]) < ws.VISIBLE_GROUPS
+                           and (float(m.geom_rgba[g][3]) > 0 or int(m.geom_group[g]) != 2) for g in range(m.ngeom))
+        name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b)
+        if has_drawable:
+            assert name in names, name
+    for must in ("dock", "crate", "mast_s1", "mast_s2", "mast_s3", "crown_head", "clipper", "twist", "pruner", "trunk"):
+        assert must in names, must
+    assert any(n.startswith("pool_") for n in names) and any(n.startswith("actor_") for n in names)
+
+
+def test_orchard_scene_draws_foliage_meshes_terrain_and_laterals_never_group5(orchard):
+    m, _, _, scene = orchard
+    geoms = scene["geoms"]
+    assert all(g["group"] <= 4 for g in geoms)
+    meshes = [g for g in geoms if g["type"] == "mesh"]
+    assert len(meshes) == 17 and all(g["mesh"] in scene["meshes"] for g in meshes)       # one foliage mesh per tree
+    for name, blk in scene["meshes"].items():
+        assert len(blk["v"]) % 3 == 0 and len(blk["f"]) % 3 == 0 and max(blk["f"]) < len(blk["v"]) // 3
+    hf = [g for g in geoms if g["type"] == "hfield"]
+    assert len(hf) == 1
+    blk = scene["hfields"][hf[0]["hfield"]]
+    assert blk["rows"] <= ws.HFIELD_MAX_SIDE + 1 and blk["cols"] <= ws.HFIELD_MAX_SIDE + 1
+    assert len(blk["z"]) == blk["rows"] * blk["cols"]
+    hid = int(m.geom_dataid[hf[0]["id"]])
+    assert max(blk["z"]) == pytest.approx(float(np.max(m.hfield_data)) * float(m.hfield_size[hid][2]), abs=1e-3)
+    names = [g["name"] or "" for g in geoms]
+    assert sum(n.startswith("lateral") for n in names) >= 100 and any(n.startswith("rope") for n in names)
+    assert any(g["group"] == 3 for g in geoms) and any(g["group"] == 4 for g in geoms)
+    json.loads(ws.encode_message(scene))
+
+
+def test_static_bodies_are_not_streamed_and_carry_their_pose(orchard):
+    m, _, _, scene = orchard
+    streamed, static = ws.scene_bodies(m, scene)
+    assert not set(streamed) & set(static)
+    d = mujoco.MjData(m)
+    mujoco.mj_resetDataKeyframe(m, d, 0)
+    mujoco.mj_kinematics(m, d)
+    for b in scene["static_bodies"]:
+        assert not ws.body_moves(m, b["id"])
+        assert b["pose"][:3] == pytest.approx(d.xpos[b["id"]].tolist(), abs=1e-4)
+    assert all(ws.body_moves(m, b) for b in streamed)
+    assert {"dock", "crate"} <= {b["name"] for b in scene["static_bodies"]}
+
+
+def test_sim_state_moves_the_crown_mast_in_the_browser_poses(orchard):
+    m, w, _, scene = orchard
+    sim_state.discover_providers()
+    d = mujoco.MjData(m)
+    mujoco.mj_resetDataKeyframe(m, d, 0)
+    st = sim_state.pack(m, d, w.world_id)
+    ids = [b["id"] for b in scene["bodies"]]
+    s3 = ids.index(mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "mast_s3"))
+    ok, why = sim_state.apply(m, d, st, w.world_id)
+    assert ok, why
+    mujoco.mj_kinematics(m, d)
+    z0 = ws.poses_of(d, ids)[s3 * 7 + 2]
+    st["mutations"]["providers"]["mast"]["data"]["ext_m"] = 1.2
+    ok, why = sim_state.apply(m, d, st, w.world_id)
+    assert ok, why
+    mujoco.mj_kinematics(m, d)
+    z1 = ws.poses_of(d, ids)[s3 * 7 + 2]
+    assert z1 - z0 == pytest.approx(1.2, abs=0.02)     # mast_s3 rides 3 x ext/3
+    st["mutations"]["providers"]["mast"]["data"]["ext_m"] = 0.0
+    sim_state.apply(m, d, st, w.world_id)
+
+
+def test_provider_managed_geoms_are_styled_and_hidden_until_assigned(orchard):
+    m, _, _, scene = orchard
+    styled = scene["styled"]
+    assert styled and all(int(m.geom_group[g]) != 2 for g in styled)
+    rows = ws.geom_styles(m, styled)
+    assert all(len(r) == 15 and r[0] in styled for r in rows)
+    hidden = ws.hidden_geoms(m, [g["id"] for g in scene["geoms"]])
+    assert set(styled) <= set(hidden)          # unassigned pool slots: alpha 0 -> hidden in the browser
+
+
+def test_state_stream_fits_the_byte_budget(orchard):
+    """30 Hz poses + the four 2 Hz console streams + a 2 Hz 160 x 120 head camera stay far below 1 MiB/s."""
+    m, _, _, scene = orchard
+    d = mujoco.MjData(m)
+    mujoco.mj_resetDataKeyframe(m, d, 0)
+    mujoco.mj_kinematics(m, d)
+    frame = {"type": "state", "poses": ws.poses_of(d, [b["id"] for b in scene["bodies"]]),
+             "telemetry": ws.telemetry(d.qpos), "game": {"in_basket": 0, "crops_total": 6}, "harvest": {},
+             "loco": {"mode": "tripod"}, "sim_age_s": 0.01, "hold": False, "ext": {}, "ages": {},
+             "health": {k: "ok" for k in range(12)}, "estop": {"latched": False}, "hidden": list(scene["styled"]),
+             "styles": None, "relay": False}
+    state_b = len(ws.encode_message(frame))
+    with open(os.path.join(os.path.dirname(__file__), "..", "config", "fields", "orchard_demo.json")) as fh:
+        field = json.load(fh)
+    hub = cp.ConsoleHub(field)
+    ctx = hub.ready_context(1.0)
+    streams_b = sum(len(ws.encode_message(x)) for x in (hub.preset_status(1.0, ctx), hub.coverage(1.0), hub.mast(1.0),
+                                                        hub.recovery(1.0)))
+    camera_b = 8 * 1024 * 4 // 3
+    per_s = 30 * state_b + 2 * streams_b + 2 * camera_b
+    print(f"state frame {state_b} B, console streams {streams_b} B, total {per_s / 1024:.0f} KiB/s")
+    assert per_s < cp.BUDGET_BYTES_PER_S / 2
+    assert len(ws.encode_message(scene)) < 2 * 1024 * 1024    # the one-off scene event
